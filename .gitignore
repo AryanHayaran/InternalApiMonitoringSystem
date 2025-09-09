@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.env
+*.venv
+env/
+venv/
+*.egg-info/
+dist/
+build/
+*.log
+
+# FastAPI & Alembic
+alembic.ini
+migrations/
+
+# Docker
+*.pid
+*.seed
+*.bak
+*.tmp
+*.swp
+docker-compose.override.yml
+.env.docker
+
+# PostgreSQL
+*.db
+*.sqlite3
+*.pgsql
+
+# Redis
+dump.rdb
+
+# Kafka
+*.kafka
+
+# VSCode
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

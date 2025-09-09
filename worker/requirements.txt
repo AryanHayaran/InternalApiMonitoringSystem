@@ -1,0 +1,15 @@
+# Async HTTP requests
+httpx==0.28.1
+aiohttp==3.9.4
+
+# Kafka producer
+confluent-kafka==2.2.0
+
+# Redis (replaces deprecated aioredis)
+redis==5.0.3
+
+# Logging
+loguru==0.7.2
+
+# Optional env
+python-dotenv==1.0.1

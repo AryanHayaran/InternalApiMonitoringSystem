@@ -1,0 +1,91 @@
+version: "3.9"
+
+services:
+  # zookeeper:
+  #   image: confluentinc/cp-zookeeper:7.5.0
+  #   container_name: zookeeper
+  #   environment:
+  #     ZOOKEEPER_CLIENT_PORT: 2181
+  #     ZOOKEEPER_TICK_TIME: 2000
+  #   ports:
+  #     - "2181:2181"
+
+  # kafka:
+  #   image: confluentinc/cp-kafka:7.5.0
+  #   container_name: kafka
+  #   depends_on:
+  #     - zookeeper
+  #   ports:
+  #     - "9092:9092"
+  #   environment:
+  #     KAFKA_BROKER_ID: 1
+  #     KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # FastAPI Core API (Producer)
+  fastapi:
+    build: ./monitoring-api
+    container_name: monitoring_api
+    environment:
+      - PGHOST=${PGHOST}
+      - PGDATABASE=${PGDATABASE}
+      - PGUSER=${PGUSER}
+      - PGPASSWORD=${PGPASSWORD}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - KAFKA_USERNAME=${KAFKA_USERNAME}
+      - KAFKA_PASSWORD=${KAFKA_PASSWORD}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./monitoring-api:/app
+    depends_on: []
+
+  # Health Check Worker (Producer to Kafka)
+  worker:
+    build: ./worker
+    container_name: health_worker
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - KAFKA_USERNAME=${KAFKA_USERNAME}
+      - KAFKA_PASSWORD=${KAFKA_PASSWORD}
+    volumes:
+      - ./worker:/app
+    depends_on:
+      - fastapi
+
+  # Alerting Consumer (Kafka Consumer)
+  consumer:
+    build: ./alerting-consumer
+    container_name: alert_consumer
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - KAFKA_USERNAME=${KAFKA_USERNAME}
+      - KAFKA_PASSWORD=${KAFKA_PASSWORD}
+      - NOTIFY_EMAIL=on                     # Use SES/SNS or other notifier
+      - NOTIFY_WEBHOOK=on
+    volumes:
+      - ./alerting-consumer:/app
+    depends_on:
+      - fastapi
+
+  # # Frontend (React Dashboard)
+  # frontend:
+  #   build: ./frontend
+  #   container_name: monitoring_frontend
+  #   ports:
+  #     - "3000:80"
+  #   depends_on:
+  #     - fastapi
