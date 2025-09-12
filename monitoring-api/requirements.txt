@@ -18,7 +18,7 @@ confluent-kafka==2.2.0
 pydantic==2.9.2
 sqlmodel==0.0.19
 passlib[bcrypt]==1.7.4
-bcrypt==4.3.0
+bcrypt==4.0.1
 pydantic-settings==2.3.4
 
 # Environment variables
