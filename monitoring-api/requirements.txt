@@ -16,6 +16,9 @@ confluent-kafka==2.2.0
 
 # Pydantic
 pydantic==2.9.2
+sqlmodel==0.0.19
+passlib[bcrypt]==1.7.4
+bcrypt==4.3.0
 pydantic-settings==2.3.4
 
 # Environment variables
@@ -23,3 +26,6 @@ python-dotenv==1.0.1
 
 # Logging / monitoring
 loguru==0.7.2
+
+itsdangerous>=2.1.2
+PyJWT==2.8.0

@@ -18,6 +18,13 @@ class Settings(BaseSettings):
 
     NOTIFY_EMAIL: str | None = None
     NOTIFY_WEBHOOK: str | None = None
+    
+    JWT_ALGORITHM: str = "HS256"
+    SECRET_KEY: str ="change-this-secret"
+    ACCESS_TOKEN_EXPIRY: int = 3600  # in seconds
+    REFRESH_TOKEN_EXPIRY: int = 1  # in days
+    
+    
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8",extra="ignore")
 
