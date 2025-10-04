@@ -1,4 +1,3 @@
-version: "3.9"
 
 services:
   # zookeeper:
@@ -23,9 +22,11 @@ services:
   #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
   #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  # FastAPI Core API (Producer)
+  # FastAPI Core API (Health Check and Monitoring)
   fastapi:
-    build: ./monitoring-api
+    build:
+      context: .
+      dockerfile: app/docker/Dockerfile
     container_name: monitoring_api
     environment:
       - PGHOST=${PGHOST}
@@ -42,50 +43,26 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./monitoring-api:/app
+      - .:/app
     depends_on: []
 
-  # Health Check Worker (Producer to Kafka)
-  worker:
-    build: ./worker
-    container_name: health_worker
-    environment:
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_USER=${REDIS_USER}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - KAFKA_BROKER=${KAFKA_BROKER}
-      - KAFKA_USERNAME=${KAFKA_USERNAME}
-      - KAFKA_PASSWORD=${KAFKA_PASSWORD}
-    volumes:
-      - ./worker:/app
-    depends_on:
-      - fastapi
-
-  # Alerting Consumer (Kafka Consumer)
-  consumer:
-    build: ./alerting-consumer
-    container_name: alert_consumer
-    environment:
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_USER=${REDIS_USER}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - KAFKA_BROKER=${KAFKA_BROKER}
-      - KAFKA_USERNAME=${KAFKA_USERNAME}
-      - KAFKA_PASSWORD=${KAFKA_PASSWORD}
-      - NOTIFY_EMAIL=on                     # Use SES/SNS or other notifier
-      - NOTIFY_WEBHOOK=on
-    volumes:
-      - ./alerting-consumer:/app
-    depends_on:
-      - fastapi
-
-  # # Frontend (React Dashboard)
-  # frontend:
-  #   build: ./frontend
-  #   container_name: monitoring_frontend
-  #   ports:
-  #     - "3000:80"
+  # # Alerting Consumer (Kafka Consumer)
+  # consumer:
+  #   build:
+  #     context: .
+  #     dockerfile: app/docker/Dockerfile.consumer
+  #   container_name: alert_consumer
+  #   environment:
+  #     - REDIS_HOST=${REDIS_HOST}
+  #     - REDIS_PORT=${REDIS_PORT}
+  #     - REDIS_USER=${REDIS_USER}
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #     - KAFKA_BROKER=${KAFKA_BROKER}
+  #     - KAFKA_USERNAME=${KAFKA_USERNAME}
+  #     - KAFKA_PASSWORD=${KAFKA_PASSWORD}
+  #     - NOTIFY_EMAIL=on
+  #     - NOTIFY_WEBHOOK=on
+  #   volumes:
+  #     - .:/app
   #   depends_on:
   #     - fastapi

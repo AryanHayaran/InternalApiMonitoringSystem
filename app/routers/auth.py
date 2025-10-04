@@ -1,17 +1,21 @@
+import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_db_session
-from app.crud.service import ApiServices
-from app.schemas.service import UserCreate, UserRead, UserLoginModal
-from app.core.utils import verify_password,create_access_token
-from datetime import timedelta
+from app.services.auth import ApiServices
+from app.schemas.auth import UserCreate, UserRead, UserLoginModal
+from app.core.security import AccessTokenBearer, RefreshTokenBearer, verify_password, create_access_token
+from datetime import datetime, timedelta
 from app.core.config import Config
 from fastapi.responses import JSONResponse
+from app.utils.connect import db
+from fastapi import status
+
 router = APIRouter()
 api_services =  ApiServices()
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+get_db_session = db.get_db_session
 
 @router.post("/signup", response_model=UserRead)
 async def signup_user(user_data: UserCreate, session: AsyncSession = Depends(get_db_session)):
@@ -64,16 +68,29 @@ async def login_user(login_data: UserLoginModal,session: AsyncSession = Depends(
                 }
             )
 
-# @router.post("/logout", response_model=UserRead)
-# async def revoke_token(token_details:dict = Depends(AccessTokenBearer())):
-#     jti = token_details['jti']
 
-#     # await add_jti_to_blocklist(jti)
+@router.post("/refresh_token")
+async def get_new_access_token(token_details: dict = Depends(RefreshTokenBearer())):
+    expiry_timestamp = token_details["exp"]
 
-#     return JSONResponse(
-#         content={
-#             "message": "logged out successfully",
-#         },
-#         status_code=status.HTTP_200_OK
-#     )
+    # compare timestamps properly
+    if datetime.fromtimestamp(expiry_timestamp) < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Refresh token expired")
+
+    new_access_token = create_access_token(user_data=token_details["user"])
+    return JSONResponse(content={"access_token": new_access_token})
+
+
+@router.post("/logout", response_model=UserRead)
+async def revoke_token(token_details:dict = Depends(AccessTokenBearer())):
+    jti = token_details['jti']
+
+    # await add_jti_to_blocklist(jti)
+
+    return JSONResponse(
+        content={
+            "message": "logged out successfully",
+        },
+        status_code=status.HTTP_200_OK
+    )
     

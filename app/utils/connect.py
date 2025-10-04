@@ -1,7 +1,8 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import redis.asyncio as redis
 from app.core.config import Config
-
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession
 class DB:
     def __init__(self):
         self.redis_client = None
@@ -46,18 +47,17 @@ class DB:
 
         if self.pg_engine:
             await self.pg_engine.dispose()
-
+    async def get_db_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """
+        Dependency that yields an AsyncSession instance.
+        Usage in FastAPI: Depends(db.get_db_session)
+        """
+        if self.pg_session_factory is None:
+            raise RuntimeError("pg_session_factory is not initialized")
+        async with self.pg_session_factory() as session:
+            yield session
 
 db = DB()
 
 
 
-from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import db
-
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    if db.pg_session_factory is None:
-        raise RuntimeError("pg_session_factory is not initialized")
-    async with db.pg_session_factory() as session:
-        yield session

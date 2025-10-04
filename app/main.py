@@ -1,8 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from .api.router import router
-from .db.session import db
+from .utils.connect import db
+from .routers import auth, service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,9 +22,6 @@ app=FastAPI(
     lifespan=lifespan
 )
 
-app.include_router(router)
 
-router = APIRouter()
-
-router.include_router(auth.router, prefix="/api/auth", tags=["Health Check"])
-router.include_router(services.router, prefix="/api/services", tags=["Services"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(service.router, prefix="/api/services", tags=["Services"])

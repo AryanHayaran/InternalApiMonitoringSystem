@@ -1,9 +1,9 @@
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from app.models.service import Users
-from app.schemas.service import UserCreate
-from app.core.utils import get_password_hash
+from app.db.models import Users
+from  app.schemas.auth import UserCreate
+from app.core.security import get_password_hash
 from typing import Dict, Any
 
 
