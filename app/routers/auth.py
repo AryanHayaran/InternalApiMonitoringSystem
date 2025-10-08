@@ -1,14 +1,15 @@
 import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.auth import ApiServices
-from app.schemas.auth import UserCreate, UserRead, UserLoginModal
-from app.core.security import AccessTokenBearer, RefreshTokenBearer, verify_password, create_access_token
+from app.schemas.auth import UserCreate, UserLoginModal,UserLoginResponse
+from app.core.security import verify_password, create_access_token, _get_jwt_algorithm
 from datetime import datetime, timedelta
 from app.core.config import Config
 from fastapi.responses import JSONResponse
 from app.utils.connect import db
 from fastapi import status
+import jwt
 
 router = APIRouter()
 api_services =  ApiServices()
@@ -17,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 get_db_session = db.get_db_session
 
-@router.post("/signup", response_model=UserRead)
+@router.post("/signup", response_model=UserLoginResponse)
 async def signup_user(user_data: UserCreate, session: AsyncSession = Depends(get_db_session)):
     user_exists = await api_services.user_exists(user_data.email, session)
 
@@ -26,71 +27,62 @@ async def signup_user(user_data: UserCreate, session: AsyncSession = Depends(get
             status_code=400,
             detail="User with this email already exists"
         )
-        return None
 
     user = await api_services.create_user(user_data, session)
     logger.info(f"User created successfully: {user}")   
-    return user
+    return {
+        "message": "Signup successful",
+        "user": {"email": user.email, "uid": str(user.id)},
+    }
     
-    
-@router.post("/login", response_model=UserRead)
-async def login_user(login_data: UserLoginModal,session: AsyncSession = Depends(get_db_session)):
+@router.post("/login", response_model=UserLoginResponse)
+async def login_user(response: Response, login_data: UserLoginModal, session=Depends(get_db_session)):
     user = await api_services.get_user_by_email(login_data.email, session)
-    
-    if user is not None:
-        password_valid = verify_password(login_data.password, user.password)
-        if password_valid:
-            access_token = create_access_token(
-                user_data={
-                    "email": user.email,
-                    "user_uid": str(user.id),
-                }
-            )
+    if not user or not verify_password(login_data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-            refresh_token = create_access_token(
-                user_data={
-                    "email": user.email,
-                    "user_uid": str(user.id)
-                },
-                expiry=timedelta(days=Config.REFRESH_TOKEN_EXPIRY),
-                refresh=True
-            )
-
-            return JSONResponse(
-                content={
-                    "message": "Login successful",
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "user":{
-                        "email": user.email,
-                        "uid": str(user.id),
-                    }
-                }
-            )
-
-
-@router.post("/refresh_token")
-async def get_new_access_token(token_details: dict = Depends(RefreshTokenBearer())):
-    expiry_timestamp = token_details["exp"]
-
-    # compare timestamps properly
-    if datetime.fromtimestamp(expiry_timestamp) < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Refresh token expired")
-
-    new_access_token = create_access_token(user_data=token_details["user"])
-    return JSONResponse(content={"access_token": new_access_token})
-
-
-@router.post("/logout", response_model=UserRead)
-async def revoke_token(token_details:dict = Depends(AccessTokenBearer())):
-    jti = token_details['jti']
-
-    # await add_jti_to_blocklist(jti)
-
-    return JSONResponse(
-        content={
-            "message": "logged out successfully",
-        },
-        status_code=status.HTTP_200_OK
+    # Create tokens
+    access_token = create_access_token(user_data={"email": user.email, "user_uid": str(user.id)})
+    refresh_token = create_access_token(
+        user_data={"email": user.email, "user_uid": str(user.id)},
+        refresh=True
     )
-    
+
+    # Save refresh token in DB
+    await api_services.save_refresh_token(user.id, refresh_token, session)
+
+    # Send access token in cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=Config.ACCESS_TOKEN_EXPIRY,
+    )
+
+    return {
+        "message": "Login successful",
+        "user": {"email": user.email, "uid": str(user.id)},
+    }
+
+
+@router.get("/logout")
+async def logout_user(request: Request, session=Depends(get_db_session)):
+    access_token = request.cookies.get("access_token")
+    if access_token:
+        try:
+            decoded = jwt.decode(
+                access_token,
+                Config.SECRET_KEY,
+                algorithms=[_get_jwt_algorithm()],
+                options={"verify_exp": False},
+            )
+            user_id = decoded["user"]["user_uid"]
+            await api_services.delete_user_refresh_tokens(user_id, session)
+        except Exception:
+            pass
+
+    response = Response(content='{"message":"Logged out successfully"}', media_type="application/json")
+    response.delete_cookie("access_token")
+    return response

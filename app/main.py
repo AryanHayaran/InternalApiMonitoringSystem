@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from .utils.connect import db
 from .routers import auth, service
+from .middlewares.token_refresh import TokenRefreshMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,6 +23,6 @@ app=FastAPI(
     lifespan=lifespan
 )
 
-
+app.add_middleware(TokenRefreshMiddleware)
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(service.router, prefix="/api/services", tags=["Services"])

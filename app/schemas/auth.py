@@ -6,14 +6,17 @@ class UserCreate(SQLModel):
     full_name: str | None = None
     email: str
     password: str
-
-
-class UserRead(SQLModel):
-    id: UUID 
-    email: str
-    full_name: str | None = None
     
     
 class UserLoginModal(SQLModel):
     email: str
     password: str
+
+
+class UserLoginData(SQLModel):
+    email: str
+    uid: str  # matches your response key "uid"
+
+class UserLoginResponse(SQLModel):
+    message: str
+    user: UserLoginData

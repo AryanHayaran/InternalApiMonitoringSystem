@@ -29,6 +29,9 @@ def _get_jwt_algorithm() -> str:
     return getattr(Config, "ALGORITHM", None) or getattr(Config, "JWT_ALGORITHM", "HS256")
 
 
+# -----------------------------
+# ✅ Create JWT Tokens
+# -----------------------------
 def create_access_token(
     user_data: Dict[str, Any],
     expiry: Optional[timedelta] = None,
@@ -37,89 +40,68 @@ def create_access_token(
     """
     Create JWT token:
       - payload['user'] = user_data
-      - payload['exp'] = now_utc + expiry (datetime in UTC)
+      - payload['exp'] = now_utc + expiry
       - payload['jti'] = uuid
-      - payload['refresh'] = refresh flag
+      - payload['refresh'] = True for refresh tokens
     """
     now_utc = datetime.utcnow()
-    exp_time = now_utc + (expiry if expiry is not None else timedelta(seconds=Config.ACCESS_TOKEN_EXPIRY))
+
+    # choose expiry based on type
+    exp_time = now_utc + (expiry if expiry else timedelta(seconds=(
+        Config.REFRESH_TOKEN_EXPIRY if refresh else Config.ACCESS_TOKEN_EXPIRY
+    )))
+
     payload: Dict[str, Any] = {
         "user": user_data,
         "exp": exp_time,
         "jti": str(uuid.uuid4()),
         "refresh": bool(refresh),
+        "iat": now_utc.timestamp(),
     }
 
     if not Config.SECRET_KEY:
         raise ValueError("SECRET_KEY must not be None")
+
     token = jwt.encode(payload, Config.SECRET_KEY, algorithm=_get_jwt_algorithm())
     return token
 
 
-def decode_token(token: str) -> Optional[Dict[str, Any]]:
+# -----------------------------
+# ✅ Decode & Validate JWT
+# -----------------------------
+def decode_token(token: str, verify_exp: bool = True) -> Optional[Dict[str, Any]]:
     """
     Decode and validate JWT. Returns payload dict on success, None on failure.
     """
     try:
-        token_data = jwt.decode(token, Config.SECRET_KEY, algorithms=[_get_jwt_algorithm()])
+        token_data = jwt.decode(
+            token,
+            Config.SECRET_KEY,
+            algorithms=[_get_jwt_algorithm()],
+            options={"verify_exp": verify_exp},
+        )
         return token_data
     except ExpiredSignatureError:
-        logger.exception("Token expired")
+        logger.warning("Access token expired")
         return None
     except JWTError:
-        logger.exception("Invalid token")
+        logger.warning("Invalid token")
         return None
 
 
-serializer = URLSafeTimedSerializer(
-    secret_key=Config.SECRET_KEY,
-    salt="email-verification",
-)
+# -----------------------------
+# ✅ URL Safe Tokens (optional)
+# -----------------------------
+serializer = URLSafeTimedSerializer(secret_key=Config.SECRET_KEY, salt="email-verification")
 
 
 def create_url_safe_token(data: dict):
-    token = serializer.dumps(data, salt="email-verification")
-    return token
+    return serializer.dumps(data, salt="email-verification")
 
 
 def decode_url_safe_token(token: str):
     try:
-        token_data = serializer.loads(token)
-        return token_data
+        return serializer.loads(token)
     except Exception as e:
-        logging.error(str(e))
+        logging.error(f"URLSafeToken decode error: {e}")
 
-
-class TokenBearer(HTTPBearer):
-    def __init__(self, auto_error=True):
-        super().__init__(auto_error=auto_error)
-
-    async def __call__(self, request: Request) -> Dict[str, Any] | None:
-        creds: Optional[HTTPAuthorizationCredentials] = await super().__call__(request)
-        if creds is None:
-            # no Authorization header or auto_error=False
-            raise HTTPException(status_code=401, detail="Authorization credentials not provided")
-
-        token = creds.credentials
-        token_data = decode_token(token)
-
-        if not token_data:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-        self.verify_token_data(token_data)
-        return token_data
-
-    def verify_token_data(self, token_data: dict):
-        raise NotImplementedError("Override this in subclasses")
-
-
-class AccessTokenBearer(TokenBearer):
-    def verify_token_data(self, token_data: dict) -> None:
-        if token_data.get("refresh"):
-            raise HTTPException(status_code=401, detail="Access token required")
-
-
-class RefreshTokenBearer(TokenBearer):
-    def verify_token_data(self, token_data: dict) -> None:
-        if not token_data.get("refresh"):
-            raise HTTPException(status_code=401, detail="Refresh token required")
