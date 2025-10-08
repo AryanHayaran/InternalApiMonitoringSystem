@@ -33,9 +33,9 @@ class ApiServices:
         result = await session.execute(select(Users).where(Users.email == email))
         return result.scalars().first()
 
-    async def create_user(self, user_data: UserCreate, session: AsyncSession) -> Dict[str, Any]:
+    async def create_user(self, user_data: UserCreate, session: AsyncSession) -> Users:
         user_dict = user_data.model_dump(exclude={'password'})
-        db_user = Users(**user_dict, password =get_password_hash(user_data.password))
+        db_user = Users(**user_dict, password=get_password_hash(user_data.password))
         session.add(db_user)
         try:
             await session.commit()
@@ -43,7 +43,7 @@ class ApiServices:
             await session.rollback()
             raise
         await session.refresh(db_user)
-        return {"id": db_user.id, "email": db_user.email, "full_name": db_user.full_name}
+        return db_user  # return ORM object
 
     # ----------------------------
     # Refresh Token methods (updated)

@@ -30,11 +30,11 @@ async def signup_user(user_data: UserCreate, session: AsyncSession = Depends(get
 
     user = await api_services.create_user(user_data, session)
     logger.info(f"User created successfully: {user}")   
+
     return {
         "message": "Signup successful",
         "user": {"email": user.email, "uid": str(user.id)},
     }
-    
 @router.post("/login", response_model=UserLoginResponse)
 async def login_user(response: Response, login_data: UserLoginModal, session=Depends(get_db_session)):
     user = await api_services.get_user_by_email(login_data.email, session)

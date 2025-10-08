@@ -12,7 +12,7 @@ api_services =  ApiServices()
 class TokenRefreshMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Skip login/logout routes
-        if request.url.path in ["/api/auth/login", "/api/auth/logout","/api/auth/signup"]:
+        if request.url.path in ["/api/auth/login","/api/auth/signup", "api/services/health"]:
             return await call_next(request)
 
         access_token = request.cookies.get("access_token")
