@@ -1,22 +1,48 @@
+from typing import Optional, TypeVar, Generic
 from sqlmodel import SQLModel
-from datetime import datetime
-from uuid import UUID
+from pydantic import EmailStr
+from pydantic.generics import GenericModel
 
+# ----------------------------
+# Generic type for ApiResponse
+# ----------------------------
+DataT = TypeVar("DataT")
+
+# ----------------------------
+# Standard API Response Wrapper
+# ----------------------------
+class AuthResponse(GenericModel, Generic[DataT]):
+    success: bool
+    message: str
+    status_code: int
+    data: Optional[DataT] = None
+
+# ----------------------------
+# Request Models
+# ----------------------------
 class UserCreate(SQLModel):
-    full_name: str | None = None
-    email: str
-    password: str
-    
-    
-class UserLoginModal(SQLModel):
-    email: str
+    full_name: Optional[str] = None
+    email: EmailStr
     password: str
 
 
-class UserLoginData(SQLModel):
-    email: str
+class UserLoginRequest(SQLModel):
+    email: EmailStr
+    password: str
+
+# ----------------------------
+# Response Data Models
+# ----------------------------
+class UserData(SQLModel):
+    email: EmailStr
     uid: str  # matches your response key "uid"
 
-class UserLoginResponse(SQLModel):
-    message: str
-    user: UserLoginData
+# ----------------------------
+# Response Models
+# ----------------------------
+class UserResponse(AuthResponse[UserData]):
+    pass
+
+
+class UserLogoutResponse(AuthResponse[dict]):
+    pass

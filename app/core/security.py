@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uuid
 from passlib.context import CryptContext
@@ -104,4 +104,21 @@ def decode_url_safe_token(token: str):
         return serializer.loads(token)
     except Exception as e:
         logging.error(f"URLSafeToken decode error: {e}")
+
+def get_current_user_uid(request: Request):
+    access_token = request.cookies.get("access_token")
+    try:
+        decoded = jwt.decode(
+            access_token,
+            Config.SECRET_KEY,
+            algorithms=[_get_jwt_algorithm()],
+            options={"verify_exp": False}, 
+        )
+        return decoded["user"]["user_uid"]
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid access token"
+        )
 

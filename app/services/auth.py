@@ -1,40 +1,29 @@
-from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
-from app.db.models import Users
 from  app.schemas.auth import UserCreate
-from app.core.security import get_password_hash
-from typing import Dict, Any
-from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any, Optional
-from app.db.models import Users
-
-from app.core.security import get_password_hash  # or your existing hash function
-
-from typing import Optional, Dict, Any
+from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.models import Users
 from app.core.security import get_password_hash
 
-class ApiServices:
+class UserServices:
+    """Service class for handling user-related database operations."""
+
     # ----------------------------
     # User methods
     # ----------------------------
     async def user_exists(self, email: str, session: AsyncSession) -> bool:
-        user = await self.get_user_by_email(email, session)
-        return user is not None
+        """Check if a user with the given email exists."""
+        return await self.get_user_by_email(email, session) is not None
 
     async def get_user_by_email(self, email: str, session: AsyncSession) -> Optional[Users]:
+        """Fetch a user by email."""
         result = await session.execute(select(Users).where(Users.email == email))
         return result.scalars().first()
 
     async def create_user(self, user_data: UserCreate, session: AsyncSession) -> Users:
-        user_dict = user_data.model_dump(exclude={'password'})
+        """Create a new user with hashed password."""
+        user_dict = user_data.model_dump(exclude={"password"})
         db_user = Users(**user_dict, password=get_password_hash(user_data.password))
         session.add(db_user)
         try:
@@ -43,13 +32,13 @@ class ApiServices:
             await session.rollback()
             raise
         await session.refresh(db_user)
-        return db_user  # return ORM object
+        return db_user
 
     # ----------------------------
-    # Refresh Token methods (updated)
+    # Refresh Token methods
     # ----------------------------
-    async def save_refresh_token(self, user_id: str, token: str, session: AsyncSession):
-        """Store refresh token directly in users table"""
+    async def save_refresh_token(self, user_id: str, token: str, session: AsyncSession) -> None:
+        """Store refresh token for the user."""
         await session.execute(
             update(Users)
             .where(Users.id == user_id)
@@ -57,8 +46,8 @@ class ApiServices:
         )
         await session.commit()
 
-    async def delete_user_refresh_tokens(self, user_id: str, session: AsyncSession):
-        """Clear refresh token during logout"""
+    async def delete_user_refresh_tokens(self, user_id: str, session: AsyncSession) -> None:
+        """Clear the refresh token during logout."""
         await session.execute(
             update(Users)
             .where(Users.id == user_id)
@@ -67,7 +56,7 @@ class ApiServices:
         await session.commit()
 
     async def get_refresh_token_for_user(self, user_id: str, session: AsyncSession) -> Optional[str]:
-        """Fetch stored refresh token"""
+        """Retrieve the stored refresh token for a user."""
         result = await session.execute(
             select(Users.refresh_token).where(Users.id == user_id)
         )

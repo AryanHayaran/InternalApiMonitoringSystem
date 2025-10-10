@@ -6,9 +6,9 @@ import jwt
 from app.core.config import Config
 from app.core.security import _get_jwt_algorithm, decode_token, create_access_token
 from app.utils.connect import db
-from app.services.auth import ApiServices
+from app.services.auth import UserServices
 get_db_session = db.get_db_session
-api_services =  ApiServices()
+user_services =  UserServices()
 class TokenRefreshMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Skip login/logout routes
@@ -38,13 +38,13 @@ class TokenRefreshMiddleware(BaseHTTPMiddleware):
             return JSONResponse({"detail": "Invalid token"}, status_code=401)
 
         session = await get_db_session()
-        db_refresh_token = await api_services.get_refresh_token_for_user(user_id, session)
+        db_refresh_token = await user_services.get_refresh_token_for_user(user_id, session)
         if not db_refresh_token:
             return JSONResponse({"detail": "Login required"}, status_code=401)
 
         refresh_data = decode_token(db_refresh_token)
         if not refresh_data or datetime.fromtimestamp(refresh_data["exp"]) < datetime.utcnow():
-            await api_services.delete_user_refresh_tokens(user_id, session)
+            await user_services.delete_user_refresh_tokens(user_id, session)
             return JSONResponse({"detail": "Session expired"}, status_code=401)
 
         # Generate new access token

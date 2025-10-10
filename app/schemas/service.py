@@ -1,0 +1,85 @@
+from pydantic import BaseModel, HttpUrl
+from datetime import datetime
+from typing import Optional, Dict, Any, Generic, TypeVar, List
+from pydantic.generics import GenericModel
+
+# ----------------------------
+# Generic type for ApiResponse
+# ----------------------------
+DataT = TypeVar("DataT")
+
+# ----------------------------
+# Standard API Response Wrapper
+# ----------------------------
+class ApiResponse(GenericModel, Generic[DataT]):
+    success: bool
+    message: str
+    status_code: int
+    data: Optional[DataT] = None
+
+# ----------------------------
+# Request / Input Models
+# ----------------------------
+class ApiServiceModal(BaseModel):
+    name: str
+    http_method: str 
+    url: HttpUrl
+    request_headers: Optional[Dict[str, str]] = None
+    request_body: Optional[str] = None
+    check_interval_seconds: Optional[int] = 60
+    expected_status_code: Optional[int] = 200
+    response_validation: Optional[Dict[str, Any]] = None
+
+# ----------------------------
+# Response / Output Models
+# ----------------------------
+class ServiceIdResponse(BaseModel):
+    service_id: int  # used for create/update responses
+
+class ServicesResponse(BaseModel):  
+    name: str
+    http_method: str
+    is_healthy: bool
+    response_time_ms: Optional[int] = None
+    status_code: Optional[int] = None
+
+class ApiLogsModal(BaseModel):
+    id: int
+    is_healthy: bool
+    timestamp: datetime
+    response_time_ms: int
+    status_code: int
+    response_body: Optional[str] = None
+    error_message: Optional[str] = None
+
+class ApiIncidentLogsModal(BaseModel):
+    incident_id: int
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    initial_error: str
+
+
+class LatencyData(BaseModel):
+    timestamp: datetime
+    response_time_ms: Optional[int] = None
+
+class ApiServiceDetailModal(BaseModel):
+    id: int
+    name: str
+    http_method: str
+    url: HttpUrl
+    request_headers: Optional[Dict[str, str]] = None
+    request_body: Optional[str] = None
+    check_interval_seconds: int
+    expected_status_code: int
+    response_validation: Optional[Dict[str, Any]] = None
+
+    # Health check info
+    is_healthy: bool
+    last_checked: Optional[datetime] = None
+    response_time_ms: Optional[int] = None
+    status_code: Optional[int] = None
+
+    # Last 20 latencies for graphing
+    last_20_latencies: List[LatencyData] = []
+
