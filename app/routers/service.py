@@ -1,21 +1,18 @@
-from fastapi import APIRouter, Request, Response,Depends
-import jwt
-
-from app.core.config import Config
+from fastapi import APIRouter, Depends, Response
 from app.core.security import get_current_user_uid
-from ..schemas.service import ApiServiceModal, ApiServiceDetailModal,ApiServiceResponse,ServicesResponse,ApiLogsModal,ApiIncidentLogsModal,ApiResponse
 from ..utils.connect import db
 from ..services.service import ApiService
 from ..utils.response_handler import success_response, error_response
 from ..utils.loggers import get_logger
 from typing import List
-
 from ..schemas.service import (
     ApiServiceModal,
     ServicesResponse,
     ApiLogsModal,
     ApiIncidentLogsModal,
-    ApiResponse
+    ApiResponse,
+    ApiServiceDetailModal,
+    ServiceIdResponse
 )
 
 router = APIRouter()
@@ -23,88 +20,123 @@ api_services = ApiService()
 get_db_session = db.get_db_session
 logger = get_logger()
 
-
-# ----------------------------
-# Health check
-# ----------------------------
 @router.get("/health", response_model=ApiResponse[dict])
-async def health_check():
-    return success_response({"status": "ok"}, "Health check OK", 200)
+async def health_check(response: Response):
+    response.status_code = 200
+    return {
+        "success": True,
+        "message": "Health check OK",
+        "data": {"status": "ok"}
+    }
 
 
-# ----------------------------
-# Get all services
-# ----------------------------
 @router.get("/", response_model=ApiResponse[List[ServicesResponse]])
 async def get_all_services(
+    response: Response,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
     try:
         services = await api_services.get_services(user_uid, session)
-        return success_response(services, "Services fetched successfully")
+        response.status_code = 200
+        return {
+            "success": True,
+            "message": "Services fetched successfully",
+            "data": services
+        }
     except Exception as e:
         logger.error("Error fetching services for user %s: %s", user_uid, e, exc_info=True)
-        return error_response(f"Error fetching services: {str(e)}", 500)
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error fetching services: {str(e)}",
+            "data": None
+        }
 
 
-# ----------------------------
-# Create new service
-# ----------------------------
-@router.post("/services", response_model=ApiResponse[dict])
+@router.post("/service", response_model=ApiResponse[dict])
 async def create_new_service(
+    response: Response,
     api_service_data: ApiServiceModal,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
     try:
+        logger.info("Creating service for user %s with data %s", user_uid, api_service_data)
         service_id = await api_services.create_service(user_uid, api_service_data, session)
         logger.info("User %s created service %s", user_uid, service_id)
-        return success_response({"service_id": service_id}, "Service created successfully", 201)
+        response.status_code = 201
+        return {
+            "success": True,
+            "message": "Service created successfully",
+            "data": {"service_id": service_id["id"]}
+        }
     except Exception as e:
         logger.error("Error creating service for user %s: %s", user_uid, e, exc_info=True)
-        return error_response(f"Error creating service: {str(e)}", 500)
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error creating service: {str(e)}",
+            "data": None
+        }
 
 
-# ----------------------------
-# Get service 
-# ----------------------------
 @router.get("/service/{service_id}", response_model=ApiResponse[ApiServiceModal])
 async def get_service(
-    service_id: int,
+    response: Response,
+    service_id: str,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
     try:
         service_data = await api_services.get_service_by_id(user_uid, service_id, session)
-        return success_response(service_data, "Service details fetched successfully")
+        response.status_code = 200
+        return {
+            "success": True,
+            "message": "Service details fetched successfully",
+            "data": service_data
+        }
     except Exception as e:
         logger.error("Error fetching service %s for user %s: %s", service_id, user_uid, e, exc_info=True)
-        return error_response(f"Error fetching service details: {str(e)}", 500)
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error fetching service details: {str(e)}",
+            "data": None
+        }
+        
 
 
-# ----------------------------
-# Get service details
-# ----------------------------
 @router.get("/service_details/{service_id}", response_model=ApiResponse[ApiServiceDetailModal])
-async def get_service(
-    service_id: int,
+async def get_service_details(
+    response: Response,
+    service_id: str,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
     try:
+        logger.info("Fetching detailed info for service %s for user %s", service_id, user_uid)
         service_data = await api_services.get_service_detail_by_id(user_uid, service_id, session)
-        return success_response(service_data, "Service details fetched successfully")
+        response.status_code = 200
+        return {
+            "success": True,
+            "message": "Service details fetched successfully",
+            "data": service_data
+        }
     except Exception as e:
         logger.error("Error fetching service %s for user %s: %s", service_id, user_uid, e, exc_info=True)
-        return error_response(f"Error fetching service details: {str(e)}", 500)
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error fetching service details: {str(e)}",
+            "data": None
+        }
 
-# ----------------------------
-# Update service
-# ----------------------------
-@router.put("/services/{service_id}", response_model=ApiResponse[ApiServiceModal])
+
+@router.put("/service/{service_id}", response_model=ApiResponse[ServiceIdResponse])
 async def update_service(
-    service_id: int,
+    response: Response,
+    service_id: str,
     api_service_data: ApiServiceModal,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
@@ -112,60 +144,93 @@ async def update_service(
     try:
         updated_service = await api_services.update_service(user_uid, service_id, api_service_data, session)
         logger.info("User %s updated service %s", user_uid, service_id)
-        return success_response(updated_service, "Service updated successfully")
+        response.status_code = 200
+        return {
+            "success": True,
+            "message": "Service updated successfully",
+            "data": updated_service
+        }
     except Exception as e:
         logger.error("Error updating service %s for user %s: %s", service_id, user_uid, e, exc_info=True)
-        return error_response(f"Error updating service: {str(e)}", 500)
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error updating service: {str(e)}",
+            "data": None
+        }
 
 
-# ----------------------------
-# Delete service
-# ----------------------------
-@router.delete("/services/{service_id}", response_model=ApiResponse[dict])
+@router.delete("/service/{service_id}", response_model=ApiResponse[dict])
 async def delete_service(
-    service_id: int,
+    response: Response,
+    service_id: str,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
     try:
         await api_services.delete_service(user_uid, service_id, session)
         logger.info("User %s deleted service %s", user_uid, service_id)
-        return success_response({}, "Service deleted successfully")
+        response.status_code = 200
+        return {
+            "success": True,
+            "message": "Service deleted successfully",
+            "data": {}
+        }
     except Exception as e:
         logger.error("Error deleting service %s for user %s: %s", service_id, user_uid, e, exc_info=True)
-        return error_response(f"Error deleting service: {str(e)}", 500)
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error deleting service: {str(e)}",
+            "data": None
+        }
 
 
-# ----------------------------
-# Get service logs
-# ----------------------------
 @router.get("/services/{service_id}/logs", response_model=ApiResponse[List[ApiLogsModal]])
 async def get_service_logs(
+    response: Response,
     service_id: int,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
     try:
         logs_data = await api_services.get_logs(user_uid, service_id, session)
-        return success_response(logs_data, "Service logs fetched successfully")
+        response.status_code = 200
+        return {
+            "success": True,
+            "message": "Service logs fetched successfully",
+            "data": logs_data
+        }
     except Exception as e:
         logger.error("Error fetching logs for service %s user %s: %s", service_id, user_uid, e, exc_info=True)
-        return error_response(f"Error fetching service logs: {str(e)}", 500)
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error fetching service logs: {str(e)}",
+            "data": None
+        }
 
 
-# ----------------------------
-# Get service incident logs
-# ----------------------------
 @router.get("/services/{service_id}/incident-logs", response_model=ApiResponse[List[ApiIncidentLogsModal]])
 async def get_service_history(
+    response: Response,
     service_id: int,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
     try:
         incident_logs_data = await api_services.get_incidents_logs(user_uid, service_id, session)
-        return success_response(incident_logs_data, "Incident logs fetched successfully")
+        response.status_code = 200
+        return {
+            "success": True,
+            "message": "Incident logs fetched successfully",
+            "data": incident_logs_data
+        }
     except Exception as e:
         logger.error("Error fetching incident logs for service %s user %s: %s", service_id, user_uid, e, exc_info=True)
-        return error_response(f"Error fetching incident logs: {str(e)}", 500)
-
+        response.status_code = 500
+        return {
+            "success": False,
+            "message": f"Error fetching incident logs: {str(e)}",
+            "data": None
+        }

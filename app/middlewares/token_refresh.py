@@ -37,7 +37,7 @@ class TokenRefreshMiddleware(BaseHTTPMiddleware):
         except Exception:
             return JSONResponse({"detail": "Invalid token"}, status_code=401)
 
-        session = await get_db_session()
+        session = await anext(get_db_session())
         db_refresh_token = await user_services.get_refresh_token_for_user(user_id, session)
         if not db_refresh_token:
             return JSONResponse({"detail": "Login required"}, status_code=401)
@@ -54,7 +54,7 @@ class TokenRefreshMiddleware(BaseHTTPMiddleware):
             key="access_token",
             value=new_access_token,
             httponly=True,
-            secure=True,
+            secure=False,
             samesite="lax",
             max_age=Config.ACCESS_TOKEN_EXPIRY,
         )

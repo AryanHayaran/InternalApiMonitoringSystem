@@ -14,7 +14,6 @@ DataT = TypeVar("DataT")
 class ApiResponse(GenericModel, Generic[DataT]):
     success: bool
     message: str
-    status_code: int
     data: Optional[DataT] = None
 
 # ----------------------------
@@ -34,7 +33,7 @@ class ApiServiceModal(BaseModel):
 # Response / Output Models
 # ----------------------------
 class ServiceIdResponse(BaseModel):
-    service_id: int  # used for create/update responses
+    service_id: str  # used for create/update responses
 
 class ServicesResponse(BaseModel):  
     name: str
