@@ -12,7 +12,7 @@ class ApiService:
     async def get_services(self, user_uid: str, session: AsyncSession) :
         """Fetch all monitored endpoints for a user with latest health info."""
         query = text("""
-            SELECT me.id, me.name, me.http_method, hcl.is_healthy, hcl.response_time_ms, hcl.status_code
+            SELECT me.name, me.http_method, hcl.is_healthy, hcl.response_time_ms
             FROM monitored_endpoints me
             LEFT JOIN LATERAL (
                 SELECT *
@@ -84,10 +84,10 @@ class ApiService:
 
             # Latest health
             health_query = text("""
-                SELECT is_healthy, last_checked, response_time_ms, status_code
+                SELECT is_healthy, checked_at, response_time_ms, status_code
                 FROM health_check_logs
                 WHERE endpoint_id = :service_id
-                ORDER BY timestamp DESC
+                ORDER BY checked_at DESC
                 LIMIT 1;
             """)
             health_result = await session.execute(health_query, {"service_id": service_id})
@@ -96,29 +96,30 @@ class ApiService:
             if health_row:
                 data.update({
                     "is_healthy": health_row.is_healthy,
-                    "last_checked": health_row.last_checked,
+                    "checked_at": health_row.checked_at,
                     "response_time_ms": health_row.response_time_ms,
                     "status_code": health_row.status_code,
                 })
             else:
                 data.update({
                     "is_healthy": False,
-                    "last_checked": None,
+                    "checked_at": None,
                     "response_time_ms": None,
                     "status_code": None,
                 })
 
             # Last 20 latencies
             latencies_query = text("""
-                SELECT timestamp, response_time_ms
-                FROM incidents
+                SELECT checked_at, response_time_ms
+                FROM health_check_logs
                 WHERE endpoint_id = :service_id
-                ORDER BY timestamp DESC
+                ORDER BY checked_at DESC
                 LIMIT 20;
             """)
             latencies_result = await session.execute(latencies_query, {"service_id": service_id})
             latencies_rows = latencies_result.fetchall()
-            data["latencies"] = [{"timestamp": row.timestamp, "response_time_ms": row.response_time_ms} for row in latencies_rows]
+            logger.info("Fetched %d latency records for service %s", latencies_rows, service_id)
+            data["last_20_latencies"] = [{"checked_at": row.checked_at, "response_time_ms": row.response_time_ms} for row in latencies_rows]
 
             return data
 
@@ -184,24 +185,24 @@ class ApiService:
         logger.info("User %s deleted service %s", user_uid, service_id)
         return deleted_row
 
-    async def get_logs(self, user_uid: str, service_id: int, session: AsyncSession):
+    async def get_logs(self, user_uid: str, service_id: str, session: AsyncSession):
         """Fetch all health check logs for a service."""
         query = text("""
-            SELECT hcl.id, hcl.is_healthy, hcl.timestamp, hcl.response_time_ms, hcl.status_code,
+            SELECT hcl.id, hcl.is_healthy, hcl.checked_at, hcl.response_time_ms, hcl.status_code,
                    hcl.response_body, hcl.error_message
             FROM health_check_logs hcl
             JOIN monitored_endpoints me ON hcl.endpoint_id = me.id
             WHERE me.id = :service_id AND me.owner_user_id = :user_uid
-            ORDER BY hcl.timestamp DESC;
+            ORDER BY hcl.checked_at DESC;
         """)
         result = await session.execute(query, {"service_id": service_id, "user_uid": user_uid})
         return [dict(row._mapping) for row in result.fetchall()]
 
-    async def get_incidents_logs(self, user_uid: str, service_id: int, session: AsyncSession):
+    async def get_incidents_logs(self, user_uid: str, service_id: str, session: AsyncSession):
         """Fetch all incident logs for a service."""
         query = text("""
-            SELECT il.incident_id, il.start_time, il.end_time, il.initial_error
-            FROM incident_logs il
+            SELECT il.id, il.start_time, il.end_time, il.initial_error
+            FROM incidents il
             JOIN monitored_endpoints me ON il.endpoint_id = me.id
             WHERE me.id = :service_id AND me.owner_user_id = :user_uid
             ORDER BY il.start_time DESC;

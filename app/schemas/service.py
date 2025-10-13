@@ -2,6 +2,7 @@ from pydantic import BaseModel, HttpUrl
 from datetime import datetime
 from typing import Optional, Dict, Any, Generic, TypeVar, List
 from pydantic.generics import GenericModel
+from uuid import UUID
 
 # ----------------------------
 # Generic type for ApiResponse
@@ -38,32 +39,30 @@ class ServiceIdResponse(BaseModel):
 class ServicesResponse(BaseModel):  
     name: str
     http_method: str
-    is_healthy: bool
+    is_healthy: Optional[bool] = None
     response_time_ms: Optional[int] = None
-    status_code: Optional[int] = None
 
 class ApiLogsModal(BaseModel):
     id: int
     is_healthy: bool
-    timestamp: datetime
+    checked_at: datetime
     response_time_ms: int
-    status_code: int
     response_body: Optional[str] = None
     error_message: Optional[str] = None
 
 class ApiIncidentLogsModal(BaseModel):
-    incident_id: int
+    id: UUID
     start_time: datetime
     end_time: Optional[datetime] = None
     initial_error: str
 
 
 class LatencyData(BaseModel):
-    timestamp: datetime
-    response_time_ms: Optional[int] = None
+    checked_at: datetime
+    response_time_ms: Optional[int]
 
 class ApiServiceDetailModal(BaseModel):
-    id: int
+    id: UUID
     name: str
     http_method: str
     url: HttpUrl

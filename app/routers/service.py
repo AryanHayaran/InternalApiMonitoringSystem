@@ -186,10 +186,10 @@ async def delete_service(
         }
 
 
-@router.get("/services/{service_id}/logs", response_model=ApiResponse[List[ApiLogsModal]])
+@router.get("/service/{service_id}/logs", response_model=ApiResponse[List[ApiLogsModal]])
 async def get_service_logs(
     response: Response,
-    service_id: int,
+    service_id: str,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
@@ -211,10 +211,10 @@ async def get_service_logs(
         }
 
 
-@router.get("/services/{service_id}/incident-logs", response_model=ApiResponse[List[ApiIncidentLogsModal]])
+@router.get("/service/{service_id}/incident-logs", response_model=ApiResponse[List[ApiIncidentLogsModal]])
 async def get_service_history(
     response: Response,
-    service_id: int,
+    service_id: str,
     user_uid: str = Depends(get_current_user_uid),
     session=Depends(get_db_session)
 ):
