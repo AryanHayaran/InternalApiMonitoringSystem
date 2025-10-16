@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import json
 from ..utils.loggers import get_logger
+from ..schemas.service import ApiServiceModal
 
 logger = get_logger("app")
 
@@ -51,12 +52,12 @@ class ApiService:
         """)
         values = {
             "name": api_service_data.name,
-            "http_method": api_service_data.http_method,
+            "http_method": api_service_data.http_method or "GET",
             "url": str(api_service_data.url),
             "request_headers": json.dumps(api_service_data.request_headers) if api_service_data.request_headers else None,
-            "request_body": api_service_data.request_body,
-            "check_interval_seconds": api_service_data.check_interval_seconds,
-            "expected_status_code": api_service_data.expected_status_code,
+            "request_body": json.dumps(api_service_data.request_body, ensure_ascii=False) if api_service_data.request_body is not None else None,
+            "check_interval_seconds": api_service_data.check_interval_seconds or 60,
+            "expected_status_code": api_service_data.expected_status_code or 200,
             "response_validation": json.dumps(api_service_data.response_validation) if api_service_data.response_validation else None,
             "owner_user_id": user_uid
         }
@@ -144,18 +145,20 @@ class ApiService:
             RETURNING id;
         """)
 
+
         values = {
             "name": api_service_data.name,
-            "http_method": api_service_data.http_method,
+            "http_method": api_service_data.http_method or "GET",
             "url": str(api_service_data.url),
             "request_headers": json.dumps(api_service_data.request_headers) if api_service_data.request_headers else None,
-            "request_body": api_service_data.request_body,
-            "check_interval_seconds": api_service_data.check_interval_seconds,
-            "expected_status_code": api_service_data.expected_status_code,
+            "request_body": json.dumps(api_service_data.request_body, ensure_ascii=False) if api_service_data.request_body is not None else None,
+            "check_interval_seconds": api_service_data.check_interval_seconds or 60,
+            "expected_status_code": api_service_data.expected_status_code or 200,
             "response_validation": json.dumps(api_service_data.response_validation) if api_service_data.response_validation else None,
             "service_id": service_id,
-            "user_uid": user_uid
+            "owner_user_id": user_uid
         }
+
 
         result = await session.execute(query, values)
         updated_row = result.scalar_one_or_none()  # ✅ use scalar instead of fetchone()
@@ -210,16 +213,29 @@ class ApiService:
         result = await session.execute(query, {"service_id": service_id, "user_uid": user_uid})
         return [dict(row._mapping) for row in result.fetchall()]
     
-
-    
     async def get_all_api_services(self, session: AsyncSession):
         """Fetch all monitored endpoints."""
         query = text("""
-            SELECT id, name, http_method, url, request_headers, request_body,
-                   check_interval_seconds, expected_status_code, response_validation, owner_user_id
+            SELECT  name, http_method, url, request_headers, request_body,
+                   check_interval_seconds, expected_status_code, response_validation
             FROM monitored_endpoints;
         """)
         result = await session.execute(query)
         rows = result.fetchall()
-        services = [dict(row._mapping) for row in rows]
+
+        services = []
+        for row in rows:
+            data = dict(row._mapping)
+
+            # Parse JSONB fields back into dict/list
+            for key in ["request_headers", "request_body", "response_validation"]:
+                if data.get(key):
+                    try:
+                        data[key] = json.loads(data[key])
+                    except (TypeError, json.JSONDecodeError):
+                        # fallback to original value if not JSON string
+                        pass
+
+            services.append(ApiServiceModal(**data))
+
         return services

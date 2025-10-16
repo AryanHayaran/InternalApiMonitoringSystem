@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlmodel import SQLModel
-
 from .utils.connect import db
 from .routers import auth, service
 from .middlewares.token_refresh import TokenRefreshMiddleware

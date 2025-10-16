@@ -1,6 +1,6 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
 from datetime import datetime
-from typing import Optional, Dict, Any, Generic, TypeVar, List
+from typing import Optional, Dict, Any, Generic, TypeVar, List, Union
 from pydantic.generics import GenericModel
 from uuid import UUID
 
@@ -22,10 +22,10 @@ class ApiResponse(GenericModel, Generic[DataT]):
 # ----------------------------
 class ApiServiceModal(BaseModel):
     name: str
-    http_method: str 
+    http_method: str = "GET"
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
-    request_body: Optional[str] = None
+    request_body: Optional[Union[Dict[str, Any], list]] = None 
     check_interval_seconds: Optional[int] = 60
     expected_status_code: Optional[int] = 200
     response_validation: Optional[Dict[str, Any]] = None
@@ -80,4 +80,12 @@ class ApiServiceDetailModal(BaseModel):
 
     # Last 20 latencies for graphing
     last_20_latencies: List[LatencyData] = []
+    
+    
+class ApiResponseModal(BaseModel):
+    checked_at: datetime
+    response_time_ms : Optional[int] = None
+    status_code : Optional[int] = None
+    response_body : Optional[Any] = None
+    error_message : Optional[str] = None
 
