@@ -209,3 +209,17 @@ class ApiService:
         """)
         result = await session.execute(query, {"service_id": service_id, "user_uid": user_uid})
         return [dict(row._mapping) for row in result.fetchall()]
+    
+
+    
+    async def get_all_api_services(self, session: AsyncSession):
+        """Fetch all monitored endpoints."""
+        query = text("""
+            SELECT id, name, http_method, url, request_headers, request_body,
+                   check_interval_seconds, expected_status_code, response_validation, owner_user_id
+            FROM monitored_endpoints;
+        """)
+        result = await session.execute(query)
+        rows = result.fetchall()
+        services = [dict(row._mapping) for row in rows]
+        return services
