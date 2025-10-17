@@ -12,6 +12,8 @@ dist/
 build/
 *.log
 
+venv/
+
 # FastAPI & Alembic
 alembic.ini
 migrations/
