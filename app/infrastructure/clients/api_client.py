@@ -28,19 +28,15 @@ async def check_api_health(service: ApiServiceModal) -> ApiResponseModal:
 
     checked_at = datetime.utcnow()
     start_time = time.perf_counter()
-
     status_code: Optional[int] = None
     response_body: Optional[Any] = None
     error_message: Optional[str] = None
-
     method = (service.http_method or "GET").upper()
     headers = service.request_headers or {}
     body = service.request_body
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
-            logger.info(f"🌐 Hitting API: {service.name} [{method} {service.url}]")
-
             request_kwargs: dict[str, Any] = {"headers": headers}
 
             if body is not None:
@@ -51,40 +47,34 @@ async def check_api_health(service: ApiServiceModal) -> ApiResponseModal:
 
             response = await client.request(method, str(service.url), **request_kwargs)
             status_code = response.status_code
-
-            # Always try to parse JSON first
             try:
                 json_data = response.json()
-                # Truncate if JSON is too large
                 json_str = json.dumps(json_data, ensure_ascii=False)
                 if len(json_str) > 100_000:
                     response_body = {
                         "_truncated": True,
-                        "preview": json_data  # full object as preview, can optionally slice
+                        "preview": json_data 
                     }
                 else:
                     response_body = json_data
 
             except Exception:
-                # fallback: wrap plain text in dict
                 text = response.text
                 response_body = {
                     "_raw_text": text[:100_000] + "...[truncated]" if len(text) > 100_000 else text
                 }
 
-            logger.info(f"✅ API {service.name} responded with status {status_code}")
-
     except httpx.TimeoutException:
         error_message = "Request timed out"
-        logger.warning(f"⚠️ Timeout for {service.name} ({service.url})")
+        logger.warning(f" Timeout for {service.name} ({service.url})")
 
     except httpx.RequestError as e:
         error_message = f"Request failed: {e}"
-        logger.error(f"❌ Network error for {service.name}: {e}")
+        logger.error(f"Network error for {service.name}: {e}")
 
     except Exception as e:
         error_message = f"Unexpected error: {e}"
-        logger.exception(f"🔥 Unexpected error while hitting {service.name}")
+        logger.exception(f"Unexpected error while hitting {service.name}")
 
     finally:
         response_time_ms = int((time.perf_counter() - start_time) * 1000)

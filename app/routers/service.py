@@ -14,7 +14,7 @@ from ..schemas.service import (
     ApiServiceDetailModal,
     ServiceIdResponse
 )
-
+import json
 router = APIRouter()
 api_services = ApiService()
 get_db_session = db.get_db_session
@@ -90,6 +90,7 @@ async def get_service(
 ):
     try:
         service_data = await api_services.get_service_by_id(user_uid, service_id, session)
+        print("Fetched service data:", service_data)
         response.status_code = 200
         return {
             "success": True,
@@ -117,6 +118,8 @@ async def get_service_details(
     try:
         logger.info("Fetching detailed info for service %s for user %s", service_id, user_uid)
         service_data = await api_services.get_service_detail_by_id(user_uid, service_id, session)
+        
+                
         response.status_code = 200
         return {
             "success": True,

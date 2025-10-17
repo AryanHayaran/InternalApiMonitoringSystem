@@ -2,17 +2,15 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlmodel import SQLModel
 from .utils.connect import db
 from .routers import auth, service
 from .middlewares.token_refresh import TokenRefreshMiddleware
-from .db import models 
-
-from .infrastructure.kafka.producer import run_all_health_checks
+from .infrastructure.kafka.producer import Producer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
+producer = Producer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,7 +18,7 @@ async def lifespan(app: FastAPI):
     await db.init_db()
 
     scheduler.add_job(
-        run_all_health_checks,
+        producer.run_all_health_checks,
         'interval',
         minutes=1,
         id="health_check_job"
@@ -29,7 +27,7 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logger.info("Scheduler started with the health check job.")
 
-    yield # --- The application is now running ---
+    yield 
 
     logger.info("Shutting down application...")
 

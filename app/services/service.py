@@ -1,4 +1,5 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 import json
 from ..utils.loggers import get_logger
@@ -10,7 +11,7 @@ logger = get_logger("app")
 class ApiService:
     """Service class for managing API services."""
 
-    async def get_services(self, user_uid: str, session: AsyncSession) :
+    async def get_services(self, user_uid: str, session: AsyncSession):
         """Fetch all monitored endpoints for a user with latest health info."""
         query = text("""
             SELECT me.name, me.http_method, hcl.is_healthy, hcl.response_time_ms
@@ -28,18 +29,20 @@ class ApiService:
         rows = result.fetchall()
         services = [dict(row._mapping) for row in rows]
         return services
-    
+
     async def get_service_by_id(self, user_uid: str, service_id: str, session: AsyncSession):
         """Fetch a single monitored endpoint by ID for a user."""
         query = text("""
             SELECT name, http_method, url, request_headers, request_body,
-                   check_interval_seconds, expected_status_code, response_validation
+                check_interval_seconds, expected_status_code, response_validation
             FROM monitored_endpoints
             WHERE id = :service_id AND owner_user_id = :user_uid;
         """)
         result = await session.execute(query, {"service_id": service_id, "user_uid": user_uid})
-        return result.fetchone() 
-    
+        row_data = result.fetchone()
+        return row_data
+
+
     async def create_service(self, user_uid: str, api_service_data, session: AsyncSession):
         """Create a new monitored endpoint."""
         query = text("""
@@ -119,13 +122,16 @@ class ApiService:
             """)
             latencies_result = await session.execute(latencies_query, {"service_id": service_id})
             latencies_rows = latencies_result.fetchall()
-            logger.info("Fetched %d latency records for service %s", latencies_rows, service_id)
-            data["last_20_latencies"] = [{"checked_at": row.checked_at, "response_time_ms": row.response_time_ms} for row in latencies_rows]
+            logger.info("Fetched %d latency records for service %s",
+                        latencies_rows, service_id)
+            data["last_20_latencies"] = [
+                {"checked_at": row.checked_at, "response_time_ms": row.response_time_ms} for row in latencies_rows]
 
             return data
 
         except Exception as e:
-            logger.error("Error fetching service detail for %s: %s", service_id, e, exc_info=True)
+            logger.error("Error fetching service detail for %s: %s",
+                         service_id, e, exc_info=True)
             raise
 
     async def update_service(self, user_uid: str, service_id: str, api_service_data, session: AsyncSession):
@@ -145,7 +151,6 @@ class ApiService:
             RETURNING id;
         """)
 
-
         values = {
             "name": api_service_data.name,
             "http_method": api_service_data.http_method or "GET",
@@ -159,12 +164,12 @@ class ApiService:
             "owner_user_id": user_uid
         }
 
-
         result = await session.execute(query, values)
         updated_row = result.scalar_one_or_none()  # ✅ use scalar instead of fetchone()
 
         if not updated_row:
-            logger.warning("Update failed: Service %s not found or not owned by user %s", service_id, user_uid)
+            logger.warning(
+                "Update failed: Service %s not found or not owned by user %s", service_id, user_uid)
             raise ValueError("Service not found or not owned by user")
 
         await session.commit()
@@ -182,7 +187,8 @@ class ApiService:
         result = await session.execute(query, {"service_id": service_id, "user_uid": user_uid})
         deleted_row = result.scalar_one_or_none()
         if not deleted_row:
-            logger.warning("Delete failed: Service %s not found or not owned by user %s", service_id, user_uid)
+            logger.warning(
+                "Delete failed: Service %s not found or not owned by user %s", service_id, user_uid)
             raise ValueError("Service not found or not owned by user")
         await session.commit()
         logger.info("User %s deleted service %s", user_uid, service_id)
@@ -212,7 +218,7 @@ class ApiService:
         """)
         result = await session.execute(query, {"service_id": service_id, "user_uid": user_uid})
         return [dict(row._mapping) for row in result.fetchall()]
-    
+
     async def get_all_api_services(self, session: AsyncSession):
         """Fetch all monitored endpoints."""
         query = text("""
@@ -227,13 +233,11 @@ class ApiService:
         for row in rows:
             data = dict(row._mapping)
 
-            # Parse JSONB fields back into dict/list
             for key in ["request_headers", "request_body", "response_validation"]:
                 if data.get(key):
                     try:
                         data[key] = json.loads(data[key])
                     except (TypeError, json.JSONDecodeError):
-                        # fallback to original value if not JSON string
                         pass
 
             services.append(ApiServiceModal(**data))

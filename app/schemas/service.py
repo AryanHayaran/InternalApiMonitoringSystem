@@ -25,7 +25,7 @@ class ApiServiceModal(BaseModel):
     http_method: str = "GET"
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
-    request_body: Optional[Union[Dict[str, Any], list]] = None 
+    request_body: Optional[Any]  # or list
     check_interval_seconds: Optional[int] = 60
     expected_status_code: Optional[int] = 200
     response_validation: Optional[Dict[str, Any]] = None
@@ -67,7 +67,7 @@ class ApiServiceDetailModal(BaseModel):
     http_method: str
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
-    request_body: Optional[str] = None
+    request_body: Optional[Dict[str, Any]] = None
     check_interval_seconds: int
     expected_status_code: int
     response_validation: Optional[Dict[str, Any]] = None
