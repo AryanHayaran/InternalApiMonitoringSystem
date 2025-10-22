@@ -1,27 +1,28 @@
 services:
-  # zookeeper:
-  #   image: confluentinc/cp-zookeeper:7.5.0
-  #   container_name: zookeeper
-  #   environment:
-  #     ZOOKEEPER_CLIENT_PORT: 2181
-  #     ZOOKEEPER_TICK_TIME: 2000
-  #   ports:
-  #     - "2181:2181"
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
 
-  # kafka:
-  #   image: confluentinc/cp-kafka:7.5.0
-  #   container_name: kafka
-  #   depends_on:
-  #     - zookeeper
-  #   ports:
-  #     - "9092:9092"
-  #   environment:
-  #     KAFKA_BROKER_ID: 1
-  #     KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  # PostgreSQL
   postgres:
     image: postgres:17
     container_name: postgres_db
@@ -34,8 +35,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Redis
   redis:
     image: redis:7
     container_name: redis_cache
@@ -44,13 +49,18 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # FastAPI Core API (Health Check and Monitoring)
   fastapi:
     build:
       context: .
       dockerfile: app/docker/Dockerfile
     container_name: monitoring_api
+    restart: always
     environment:
       - PGHOST=postgres
       - PGDATABASE=${PGDATABASE}
@@ -58,39 +68,42 @@ services:
       - PGPASSWORD=${PGPASSWORD}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_USER=${REDIS_USER}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - KAFKA_BROKER=${KAFKA_BROKER}
-      - KAFKA_USERNAME=${KAFKA_USERNAME}
-      - KAFKA_PASSWORD=${KAFKA_PASSWORD}
+      - KAFKA_BROKER_URL=kafka:29092
+      - KAFKA_TOPIC_NAME=api-monitoring-results
+      - KAFKA_MAX_RETRIES=5
+      - KAFKA_RETRY_DELAY_S=2
+      - KAFKA_ENABLE_IDEMPOTENCE=true
+      - KAFKA_ACKS=all
+      - KAFKA_COMPRESSION_TYPE=gzip
     ports:
       - "8000:8000"
     volumes:
       - .:/app
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
 
-  # # Alerting Consumer (Kafka Consumer)
-  # consumer:
-  #   build:
-  #     context: .
-  #     dockerfile: app/docker/Dockerfile.consumer
-  #   container_name: alert_consumer
-  #   environment:
-  #     - REDIS_HOST=${REDIS_HOST}
-  #     - REDIS_PORT=${REDIS_PORT}
-  #     - REDIS_USER=${REDIS_USER}
-  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
-  #     - KAFKA_BROKER=${KAFKA_BROKER}
-  #     - KAFKA_USERNAME=${KAFKA_USERNAME}
-  #     - KAFKA_PASSWORD=${KAFKA_PASSWORD}
-  #     - NOTIFY_EMAIL=on
-  #     - NOTIFY_WEBHOOK=on
-  #   volumes:
-  #     - .:/app
-  #   depends_on:
-  #     - fastapi
+  consumer:
+    build:
+      context: .
+      dockerfile: app/docker/Dockerfile.consumer
+    container_name: alert_consumer
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+      - KAFKA_BROKER_URL=kafka:29092
+      - KAFKA_TOPIC_NAME=api-monitoring-results
+    volumes:
+      - .:/app
+    depends_on:
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -13,8 +13,17 @@ class Settings(BaseSettings):
     PGPORT: Optional[int] = 5432
 
     KAFKA_BROKER: str = "localhost:9092"
+    KAFKA_BROKER_URL: str = "localhost:9092"  # Alias for consistency
     KAFKA_USERNAME: str | None = None
     KAFKA_PASSWORD: str | None = None
+    KAFKA_SECURITY_PROTOCOL: str = "PLAINTEXT"  # PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL
+    KAFKA_TOPIC_NAME: str = "api-monitoring-results"
+    KAFKA_MAX_RETRIES: int = 5
+    KAFKA_RETRY_DELAY_S: int = 2
+    KAFKA_REQUEST_TIMEOUT_MS: int = 30000
+    KAFKA_ENABLE_IDEMPOTENCE: bool = True
+    KAFKA_ACKS: str = "all"  # 0, 1, all
+    KAFKA_COMPRESSION_TYPE: str = "gzip"  # none, gzip, snappy, lz4, zstd
 
     NOTIFY_EMAIL: str | None = None
     NOTIFY_WEBHOOK: str | None = None

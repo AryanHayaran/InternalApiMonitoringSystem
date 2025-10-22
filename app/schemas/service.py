@@ -25,7 +25,18 @@ class ApiServiceModal(BaseModel):
     http_method: str = "GET"
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
-    request_body: Optional[Any]  # or list
+    request_body: Optional[Any] = None
+    check_interval_seconds: Optional[int] = 60
+    expected_status_code: Optional[int] = 200
+    response_validation: Optional[Dict[str, Any]] = None
+
+class ApiProducerServiceModal(BaseModel):
+    id: UUID
+    name: str
+    http_method: str = "GET"
+    url: HttpUrl
+    request_headers: Optional[Dict[str, str]] = None
+    request_body: Optional[Any] = None
     check_interval_seconds: Optional[int] = 60
     expected_status_code: Optional[int] = 200
     response_validation: Optional[Dict[str, Any]] = None
@@ -88,4 +99,12 @@ class ApiResponseModal(BaseModel):
     status_code : Optional[int] = None
     response_body : Optional[Any] = None
     error_message : Optional[str] = None
+
+
+class ProducerResultModal(BaseModel):
+    id: UUID
+    checked_at: datetime
+    response_time_ms: Optional[int] = None
+    status_code: Optional[int] = None
+    error_message: Optional[str] = None
 

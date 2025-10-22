@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 import json
 from ..utils.loggers import get_logger
-from ..schemas.service import ApiServiceModal
+from ..schemas.service import ApiServiceModal,ApiProducerServiceModal
 
 logger = get_logger("app")
 
@@ -161,11 +161,11 @@ class ApiService:
             "expected_status_code": api_service_data.expected_status_code or 200,
             "response_validation": json.dumps(api_service_data.response_validation) if api_service_data.response_validation else None,
             "service_id": service_id,
-            "owner_user_id": user_uid
+            "user_uid": user_uid
         }
 
         result = await session.execute(query, values)
-        updated_row = result.scalar_one_or_none()  # ✅ use scalar instead of fetchone()
+        updated_row = result.fetchone()  # ✅ use scalar instead of fetchone()
 
         if not updated_row:
             logger.warning(
@@ -175,7 +175,7 @@ class ApiService:
         await session.commit()
         logger.info("User %s updated service %s", user_uid, service_id)
 
-        return {"service_id": str(updated_row)}
+        return {"service_id": str(updated_row[0])}
 
     async def delete_service(self, user_uid: str, service_id: str, session: AsyncSession):
         """Delete a monitored endpoint."""
@@ -222,7 +222,7 @@ class ApiService:
     async def get_all_api_services(self, session: AsyncSession):
         """Fetch all monitored endpoints."""
         query = text("""
-            SELECT  name, http_method, url, request_headers, request_body,
+            SELECT  id, name, http_method, url, request_headers, request_body,
                    check_interval_seconds, expected_status_code, response_validation
             FROM monitored_endpoints;
         """)
@@ -240,6 +240,6 @@ class ApiService:
                     except (TypeError, json.JSONDecodeError):
                         pass
 
-            services.append(ApiServiceModal(**data))
+            services.append(ApiProducerServiceModal(**data))
 
         return services
