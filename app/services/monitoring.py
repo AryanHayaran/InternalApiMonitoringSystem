@@ -3,7 +3,7 @@ from typing import List
 from app.utils.connect import db
 from app.services.service import ApiService
 from app.infrastructure.clients.api_client import check_api_health
-from app.schemas.service import ApiProducerServiceModal, ProducerResultModal
+from app.schemas.service import ApiProducerServiceModal, ProducerResultModal, ApiClientLogs
 from app.infrastructure.kafka.producer import producer_client
 
 logger = get_logger()
@@ -75,13 +75,28 @@ class Producer:
                     checked_at=health_data.checked_at,
                     response_time_ms=health_data.response_time_ms,
                     status_code=health_data.status_code,
-                    error_message=health_data.error_message
                 )
                 
                 # Send to Kafka with error handling
                 success = await producer_client.send_result(result)
                 if not success:
                     logger.warning(f"Failed to send monitoring result to Kafka for service {service.name}")
+
+
+
+                update_logs = ApiClientLogs(
+                    id=service.id,
+                    checked_at=health_data.checked_at,
+                    response_time_ms=health_data.response_time_ms,
+                    response_body=health_data.response_body,
+                    is_healthy= health_data.status_code==service.expected_status_code,
+                    status_code=health_data.status_code,
+                    error_message=health_data.error_message 
+                )
+                session = await self.get_db_session()
+                if not session:
+                    return []
+                await api_service.update_api_logs(session, update_logs)
 
             except Exception as e:
                 logger.error(f"Error checking service {service.name} at {service.url}: {e}", exc_info=True)

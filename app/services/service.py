@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 import json
 from ..utils.loggers import get_logger
-from ..schemas.service import ApiServiceModal,ApiProducerServiceModal
+from ..schemas.service import ApiServiceModal,ApiProducerServiceModal, ApiClientLogs
 
 logger = get_logger("app")
 
@@ -243,3 +243,28 @@ class ApiService:
             services.append(ApiProducerServiceModal(**data))
 
         return services
+
+    async def update_api_logs(self, session: AsyncSession, data: ApiClientLogs):
+        """
+        Inserts a new health check log into the database.
+        """
+        query = text("""
+            INSERT INTO health_check_logs
+                (endpoint_id, checked_at, is_healthy, response_time_ms, status_code, response_body, error_message)
+            VALUES
+                (:endpoint_id, :checked_at, :is_healthy, :response_time_ms, :status_code, :response_body, :error_message)
+        """)
+
+        await session.execute(query, {
+            "endpoint_id": data.id,            # or data.endpoint_id if your schema has it
+            "checked_at": data.checked_at,
+            "is_healthy": data.is_healthy,
+            "response_time_ms": data.response_time_ms,
+            "status_code": data.status_code,
+            "response_body": str(data.response_body) if data.response_body else None,
+            "error_message": str(data.error_message) if data.error_message else None
+        })
+
+        await session.commit()
+
+

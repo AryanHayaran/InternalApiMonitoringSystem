@@ -106,5 +106,13 @@ class ProducerResultModal(BaseModel):
     checked_at: datetime
     response_time_ms: Optional[int] = None
     status_code: Optional[int] = None
+
+class ApiClientLogs(BaseModel):
+    id: UUID
+    checked_at: datetime
+    response_time_ms: Optional[int] = None
+    status_code: Optional[int] = None
+    is_healthy: bool
+    response_body : Optional[Any] = None
     error_message: Optional[str] = None
 
