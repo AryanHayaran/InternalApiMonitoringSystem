@@ -29,27 +29,27 @@ async def lifespan(app: FastAPI):
         # In production, you might want to fail fast here
         # raise
 
-    # # Start scheduler
-    # scheduler.add_job(
-    #     producer.run_all_health_checks,
-    #     'interval',
-    #     minutes=1,
-    #     id="health_check_job"
-    # )
-    # scheduler.start()
-    # logger.info("Scheduler started with the health check job.")
+    # Start scheduler
+    scheduler.add_job(
+        producer.run_all_health_checks,
+        'interval',
+        minutes=1,
+        id="health_check_job"
+    )
+    scheduler.start()
+    logger.info("Scheduler started with the health check job.")
 
     yield 
 
     logger.info("Shutting down application...")
 
-    # # Shutdown scheduler
-    # scheduler.shutdown()
-    # logger.info("Scheduler shut down gracefully.")
+    # Shutdown scheduler
+    scheduler.shutdown()
+    logger.info("Scheduler shut down gracefully.")
     
-    # # Close Kafka producer
-    # await producer_client.close()
-    # logger.info("Kafka producer closed.")
+    # Close Kafka producer
+    await producer_client.close()
+    logger.info("Kafka producer closed.")
     
     # Close database
     await db.close_db()

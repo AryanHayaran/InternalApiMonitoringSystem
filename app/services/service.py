@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 import json
 from ..utils.loggers import get_logger
-from ..schemas.service import ApiServiceModal,ApiProducerServiceModal, ApiClientLogs
+from ..schemas.service import ApiServiceModal,ApiProducerServiceModal, ApiClientLogs, ConsumerMonitoringData
 
 logger = get_logger("app")
 
@@ -34,7 +34,7 @@ class ApiService:
         """Fetch a single monitored endpoint by ID for a user."""
         query = text("""
             SELECT name, http_method, url, request_headers, request_body,
-                check_interval_seconds, expected_status_code, response_validation
+                periodic_summary_report, expected_status_code, response_validation,expected_latency_ms 
             FROM monitored_endpoints
             WHERE id = :service_id AND owner_user_id = :user_uid;
         """)
@@ -47,10 +47,10 @@ class ApiService:
         """Create a new monitored endpoint."""
         query = text("""
             INSERT INTO monitored_endpoints
-            (name, http_method, url, request_headers, request_body, check_interval_seconds,
-             expected_status_code, response_validation, owner_user_id)
+            (name, http_method, url, request_headers, request_body, periodic_summary_report,
+             expected_status_code, response_validation, owner_user_id,expected_latency_ms)
             VALUES (:name, :http_method, :url, :request_headers, :request_body,
-                    :check_interval_seconds, :expected_status_code, :response_validation, :owner_user_id)
+                    :periodic_summary_report, :expected_status_code, :response_validation, :owner_user_id, :expected_latency_ms)
             RETURNING id;
         """)
         values = {
@@ -59,10 +59,11 @@ class ApiService:
             "url": str(api_service_data.url),
             "request_headers": json.dumps(api_service_data.request_headers) if api_service_data.request_headers else None,
             "request_body": json.dumps(api_service_data.request_body, ensure_ascii=False) if api_service_data.request_body is not None else None,
-            "check_interval_seconds": api_service_data.check_interval_seconds or 60,
+            "periodic_summary_report": api_service_data.periodic_summary_report or 60,
             "expected_status_code": api_service_data.expected_status_code or 200,
             "response_validation": json.dumps(api_service_data.response_validation) if api_service_data.response_validation else None,
-            "owner_user_id": user_uid
+            "owner_user_id": user_uid,
+            "expected_latency_ms" : api_service_data.expected_latency_ms or 200
         }
         result = await session.execute(query, values)
         await session.commit()
@@ -76,7 +77,7 @@ class ApiService:
             # Service info
             service_query = text("""
                 SELECT id, name, http_method, url, request_headers, request_body,
-                       check_interval_seconds, expected_status_code, response_validation
+                       periodic_summary_report, expected_status_code, response_validation
                 FROM monitored_endpoints
                 WHERE id = :service_id AND owner_user_id = :user_uid;
             """)
@@ -143,10 +144,11 @@ class ApiService:
                 url = :url,
                 request_headers = :request_headers,
                 request_body = :request_body,
-                check_interval_seconds = :check_interval_seconds,
+                periodic_summary_report = :periodic_summary_report,
                 expected_status_code = :expected_status_code,
                 response_validation = :response_validation,
-                updated_at = NOW()
+                updated_at = NOW(),
+                expected_latency_ms  = :expected_latency_ms 
             WHERE id = :service_id AND owner_user_id = :user_uid
             RETURNING id;
         """)
@@ -157,9 +159,10 @@ class ApiService:
             "url": str(api_service_data.url),
             "request_headers": json.dumps(api_service_data.request_headers) if api_service_data.request_headers else None,
             "request_body": json.dumps(api_service_data.request_body, ensure_ascii=False) if api_service_data.request_body is not None else None,
-            "check_interval_seconds": api_service_data.check_interval_seconds or 60,
+            "periodic_summary_report": api_service_data.periodic_summary_report or 60,
             "expected_status_code": api_service_data.expected_status_code or 200,
             "response_validation": json.dumps(api_service_data.response_validation) if api_service_data.response_validation else None,
+            "expected_latency_ms": api_service_data.expected_latency_ms,
             "service_id": service_id,
             "user_uid": user_uid
         }
@@ -223,7 +226,7 @@ class ApiService:
         """Fetch all monitored endpoints."""
         query = text("""
             SELECT  id, name, http_method, url, request_headers, request_body,
-                   check_interval_seconds, expected_status_code, response_validation
+                   periodic_summary_report, expected_status_code, response_validation
             FROM monitored_endpoints;
         """)
         result = await session.execute(query)
@@ -266,5 +269,18 @@ class ApiService:
         })
 
         await session.commit()
+
+    async def getConsumerServiceDetails(self, session: AsyncSession, service_id: str):
+        """Fetch a single monitored endpoint by ID for a user."""
+        query = text("""
+            SELECT id, name, http_method,
+                 expected_status_code, expected_latency_ms 
+            FROM monitored_endpoints
+            WHERE id = :service_id;
+        """)
+        result = await session.execute(query, {"service_id": service_id})
+        row_data = result.fetchone()
+        return row_data
+
 
 

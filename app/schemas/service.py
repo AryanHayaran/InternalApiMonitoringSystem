@@ -26,7 +26,8 @@ class ApiServiceModal(BaseModel):
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
     request_body: Optional[Any] = None
-    check_interval_seconds: Optional[int] = 60
+    periodic_summary_report: Optional[int] = 60
+    expected_latency_ms: Optional[int] = 200
     expected_status_code: Optional[int] = 200
     response_validation: Optional[Dict[str, Any]] = None
 
@@ -37,7 +38,7 @@ class ApiProducerServiceModal(BaseModel):
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
     request_body: Optional[Any] = None
-    check_interval_seconds: Optional[int] = 60
+    periodic_summary_report: Optional[int] = 60
     expected_status_code: Optional[int] = 200
     response_validation: Optional[Dict[str, Any]] = None
 
@@ -115,4 +116,12 @@ class ApiClientLogs(BaseModel):
     is_healthy: bool
     response_body : Optional[Any] = None
     error_message: Optional[str] = None
+
+class ConsumerMonitoringData(BaseModel):
+    id: UUID
+    name: str
+    http_method: str = "GET"
+    expected_status_code: Optional[int] = 200
+    expected_latency_ms: Optional[int] = 200
+
 
