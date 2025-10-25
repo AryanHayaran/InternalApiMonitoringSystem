@@ -29,6 +29,7 @@ class Producer:
         finally:
             await session_gen.aclose()
         return None
+        
 
     async def get_all_api(self) -> List[ApiProducerServiceModal]:
         """Fetch all monitored endpoints safely using get_db_session."""

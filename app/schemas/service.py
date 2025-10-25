@@ -80,9 +80,10 @@ class ApiServiceDetailModal(BaseModel):
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
     request_body: Optional[Dict[str, Any]] = None
-    check_interval_seconds: int
+    periodic_summary_report: int
     expected_status_code: int
     response_validation: Optional[Dict[str, Any]] = None
+    expected_latency_ms: int
 
     # Health check info
     is_healthy: bool
@@ -121,7 +122,14 @@ class ConsumerMonitoringData(BaseModel):
     id: UUID
     name: str
     http_method: str = "GET"
-    expected_status_code: Optional[int] = 200
-    expected_latency_ms: Optional[int] = 200
+    expected_status_code: Optional[int] 
+    expected_latency_ms: Optional[int] 
+
+class ApiLastThreeRecords(BaseModel):
+    id: int
+    is_healthy: bool
+    checked_at: datetime
+    response_time_ms: int
+    status_code: Optional[int]
 
 

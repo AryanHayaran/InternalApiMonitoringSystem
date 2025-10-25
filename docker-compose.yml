@@ -95,12 +95,20 @@ services:
     container_name: alert_consumer
     restart: always
     environment:
+      - PGHOST=postgres
+      - PGDATABASE=${PGDATABASE}
+      - PGUSER=${PGUSER}
+      - PGPASSWORD=${PGPASSWORD}
+      - PGPORT=5432
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - KAFKA_BROKER_URL=kafka:29092
       - KAFKA_TOPIC_NAME=api-monitoring-results
     volumes:
       - .:/app
     depends_on:
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:

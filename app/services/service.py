@@ -42,7 +42,6 @@ class ApiService:
         row_data = result.fetchone()
         return row_data
 
-
     async def create_service(self, user_uid: str, api_service_data, session: AsyncSession):
         """Create a new monitored endpoint."""
         query = text("""
@@ -74,20 +73,24 @@ class ApiService:
     async def get_service_detail_by_id(self, user_uid: str, service_id: str, session: AsyncSession):
         """Get detailed service info including last health check and last 20 latencies."""
         try:
-            # Service info
+            # --- Service info ---
             service_query = text("""
                 SELECT id, name, http_method, url, request_headers, request_body,
-                       periodic_summary_report, expected_status_code, response_validation
+                       periodic_summary_report, expected_status_code, response_validation,
+                       expected_latency_ms 
                 FROM monitored_endpoints
                 WHERE id = :service_id AND owner_user_id = :user_uid;
             """)
-            service_result = await session.execute(service_query, {"service_id": service_id, "user_uid": user_uid})
+            service_result = await session.execute(
+                service_query, {"service_id": service_id, "user_uid": user_uid}
+            )
             service_row = service_result.fetchone()
             if not service_row:
                 return None
+
             data = dict(service_row._mapping)
 
-            # Latest health
+            # --- Latest health check ---
             health_query = text("""
                 SELECT is_healthy, checked_at, response_time_ms, status_code
                 FROM health_check_logs
@@ -113,7 +116,7 @@ class ApiService:
                     "status_code": None,
                 })
 
-            # Last 20 latencies
+            # --- Last 20 latency records ---
             latencies_query = text("""
                 SELECT checked_at, response_time_ms
                 FROM health_check_logs
@@ -123,17 +126,27 @@ class ApiService:
             """)
             latencies_result = await session.execute(latencies_query, {"service_id": service_id})
             latencies_rows = latencies_result.fetchall()
-            logger.info("Fetched %d latency records for service %s",
-                        latencies_rows, service_id)
+
+            logger.info(
+                "Fetched %d latency records for service %s",
+                len(latencies_rows),
+                service_id,
+            )
+            logger.debug("Latency records: %s", latencies_rows)
+
             data["last_20_latencies"] = [
-                {"checked_at": row.checked_at, "response_time_ms": row.response_time_ms} for row in latencies_rows]
+                {"checked_at": row.checked_at, "response_time_ms": row.response_time_ms}
+                for row in latencies_rows
+            ]
 
             return data
 
         except Exception as e:
-            logger.error("Error fetching service detail for %s: %s",
-                         service_id, e, exc_info=True)
+            logger.error(
+                "Error fetching service detail for %s: %s", service_id, e, exc_info=True
+            )
             raise
+
 
     async def update_service(self, user_uid: str, service_id: str, api_service_data, session: AsyncSession):
         """Update service info."""
@@ -282,5 +295,81 @@ class ApiService:
         row_data = result.fetchone()
         return row_data
 
+    async def getApiLastThreeRecords(self, session: AsyncSession, service_id: str):
+        """Fetch the last 3 health check logs for a given service."""
+        query = text("""
+            SELECT id, checked_at, response_time_ms, status_code, is_healthy
+            FROM health_check_logs 
+            WHERE endpoint_id = :service_id
+            ORDER BY checked_at DESC 
+            LIMIT 3;
+        """)
+        result = await session.execute(query, {"service_id": service_id})
+        rows = result.fetchall()
+        return [dict(row._mapping) for row in rows]
 
+    async def createOrUpdateIncident(self, session: AsyncSession, endpoint_id: str, last_three_records):
+        """Create or update incident record intelligently based on overlap."""
+        try:
+            # 1️⃣ Calculate start and end time from last 3 records
+            start_time = last_three_records[-1]["checked_at"]  # oldest
+            end_time = last_three_records[0]["checked_at"]      # newest
 
+            # 2️⃣ Fetch the latest incident for this endpoint
+            last_incident_query = text("""
+                SELECT id, start_time, end_time
+                FROM incidents
+                WHERE endpoint_id = :endpoint_id
+                ORDER BY start_time DESC
+                LIMIT 1;
+            """)
+            result = await session.execute(last_incident_query, {"endpoint_id": endpoint_id})
+            last_incident = result.fetchone()
+
+            # 3️⃣ Decision: update existing or create new
+            if last_incident:
+                last_end_time = last_incident.end_time
+
+                # If new start overlaps or touches previous incident period
+                if last_end_time is None or start_time <= last_end_time:
+                    update_query = text("""
+                        UPDATE incidents
+                        SET end_time = :new_end_time
+                        WHERE id = :id;
+                    """)
+                    await session.execute(update_query, {
+                        "new_end_time": end_time,
+                        "id": last_incident.id
+                    })
+                    logger.info(f"Updated existing incident for endpoint {endpoint_id}")
+                else:
+                    insert_query = text("""
+                        INSERT INTO incidents (endpoint_id, start_time, end_time, initial_error)
+                        VALUES (:endpoint_id, :start_time, :end_time, :initial_error);
+                    """)
+                    await session.execute(insert_query, {
+                        "endpoint_id": endpoint_id,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "initial_error": ""
+                    })
+                    logger.info(f"Created new incident for endpoint {endpoint_id}")
+            else:
+                # No previous incident at all
+                insert_query = text("""
+                    INSERT INTO incidents (endpoint_id, start_time, end_time, initial_error)
+                    VALUES (:endpoint_id, :start_time, :end_time, :initial_error);
+                """)
+                await session.execute(insert_query, {
+                    "endpoint_id": endpoint_id,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "initial_error": ""
+                })
+                logger.info(f"Created first incident for endpoint {endpoint_id}")
+
+            await session.commit()
+
+        except Exception as e:
+            logger.error(f"Error creating/updating incident: {e}", exc_info=True)
+            await session.rollback()
