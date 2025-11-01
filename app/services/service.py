@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
@@ -373,3 +374,35 @@ class ApiService:
         except Exception as e:
             logger.error(f"Error creating/updating incident: {e}", exc_info=True)
             await session.rollback()
+ 
+    async def get_monitored_apis(session: AsyncSession):
+        """Fetch all monitored APIs with user info."""
+        query = text("""
+            SELECT m.id AS api_id, m.owner_user_id, m.periodic_summary_report, m.last_checked_at,
+                   u.email AS user_email, u.full_name AS user_name
+            FROM monitored_endpoints m
+            JOIN users u ON m.owner_user_id = u.id
+            WHERE m.is_active = TRUE;
+        """)
+        result = await session.execute(query)
+        return result.mappings().all()
+
+    async def get_incidents_since(session: AsyncSession, api_id: str, since_time: datetime):
+        """Fetch incidents that happened after a given time."""
+        query = text("""
+            SELECT id, start_time, end_time, initial_error
+            FROM incidents
+            WHERE endpoint_id = :api_id AND start_time >= :since_time;
+        """)
+        result = await session.execute(query, {"api_id": api_id, "since_time": since_time})
+        return result.mappings().all()
+
+    async def update_last_checked(session: AsyncSession, api_id: str):
+        """Update last_checked_at for a monitored API after sending alert."""
+        query = text("""
+            UPDATE monitored_endpoints
+            SET last_checked_at = :now
+            WHERE id = :api_id;
+        """)
+        await session.execute(query, {"now": datetime.utcnow(), "api_id": api_id})
+        await session.commit()

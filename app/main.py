@@ -7,6 +7,7 @@ from .routers import auth, service
 from .middlewares.token_refresh import TokenRefreshMiddleware
 from .services.monitoring import Producer
 from .infrastructure.kafka.producer import producer_client
+from .services.alert_scheduler import send_user_incident_alerts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +37,15 @@ async def lifespan(app: FastAPI):
         minutes=1,
         id="health_check_job"
     )
+
+    # Add alert notification job every 30 minutes
+    scheduler.add_job(
+        send_user_incident_alerts,
+        'interval',
+        minutes=30,
+        id="alert_scheduler_job"
+    )
+
     scheduler.start()
     logger.info("Scheduler started with the health check job.")
 
