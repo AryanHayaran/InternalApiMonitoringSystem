@@ -375,7 +375,7 @@ class ApiService:
             logger.error(f"Error creating/updating incident: {e}", exc_info=True)
             await session.rollback()
  
-    async def get_monitored_apis(session: AsyncSession):
+    async def get_monitored_apis(self, session: AsyncSession):
         """Fetch all monitored APIs with user info."""
         query = text("""
             SELECT m.id AS api_id, m.owner_user_id, m.periodic_summary_report, m.last_checked_at,
@@ -387,7 +387,7 @@ class ApiService:
         result = await session.execute(query)
         return result.mappings().all()
 
-    async def get_incidents_since(session: AsyncSession, api_id: str, since_time: datetime):
+    async def get_incidents_since(self, session: AsyncSession, api_id: str, since_time: datetime):
         """Fetch incidents that happened after a given time."""
         query = text("""
             SELECT id, start_time, end_time, initial_error
@@ -397,7 +397,7 @@ class ApiService:
         result = await session.execute(query, {"api_id": api_id, "since_time": since_time})
         return result.mappings().all()
 
-    async def update_last_checked(session: AsyncSession, api_id: str):
+    async def update_last_checked(self, session: AsyncSession, api_id: str):
         """Update last_checked_at for a monitored API after sending alert."""
         query = text("""
             UPDATE monitored_endpoints

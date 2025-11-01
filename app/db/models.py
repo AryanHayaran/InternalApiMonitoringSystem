@@ -86,6 +86,8 @@ class MonitoredEndpoints(SQLModel, table=True):
         nullable=False
     )
 
+    last_checked_at: Optional[datetime] = Field(default=None)
+
 
 class HealthCheckLogs(SQLModel, table=True):
 
