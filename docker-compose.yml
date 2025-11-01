@@ -1,4 +1,3 @@
-
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -11,21 +10,24 @@ services:
     networks:
       - monitoring_network
 
-
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka
     depends_on:
       - zookeeper
     ports:
-      - "9092:9092"
-      - "29092:29092"
+      - "9092:9092"     # Host access (Postman if needed)
+      - "29092:29092"   # Internal Docker access
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # LISTENERS
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     networks:
       - monitoring_network
@@ -73,21 +75,21 @@ services:
     container_name: monitoring_api
     restart: always
     environment:
-      - PGHOST=postgres
-      - PGDATABASE=${PGDATABASE}
-      - PGUSER=${PGUSER}
-      - PGPASSWORD=${PGPASSWORD}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - KAFKA_BROKER_URL=kafka:29092
-      - KAFKA_TOPIC_NAME=api-monitoring-results
-      - KAFKA_MAX_RETRIES=5
-      - KAFKA_RETRY_DELAY_S=2
-      - KAFKA_ENABLE_IDEMPOTENCE=true
-      - KAFKA_ACKS=all
-      - KAFKA_COMPRESSION_TYPE=gzip
+      PGHOST: postgres
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKER_URL: kafka:29092
+      KAFKA_TOPIC_NAME: api-monitoring-results
+      KAFKA_MAX_RETRIES: 5
+      KAFKA_RETRY_DELAY_S: 2
+      KAFKA_ENABLE_IDEMPOTENCE: "true"
+      KAFKA_ACKS: all
+      KAFKA_COMPRESSION_TYPE: gzip
     ports:
-      - "8000:8000"
+      - "8000:8000"   # Your FastAPI for Postman
     volumes:
       - .:/app
     depends_on:
@@ -107,15 +109,15 @@ services:
     container_name: alert_consumer
     restart: always
     environment:
-      - PGHOST=postgres
-      - PGDATABASE=${PGDATABASE}
-      - PGUSER=${PGUSER}
-      - PGPASSWORD=${PGPASSWORD}
-      - PGPORT=5432
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - KAFKA_BROKER_URL=kafka:29092
-      - KAFKA_TOPIC_NAME=api-monitoring-results
+      PGHOST: postgres
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGPORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKER_URL: kafka:29092
+      KAFKA_TOPIC_NAME: api-monitoring-results
     volumes:
       - .:/app
     depends_on:

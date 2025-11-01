@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from app.db import db
+from app.utils.connect import db
 from app.services.service import ApiService
 from app.utils.mail import send_email
 from app.utils.loggers import get_logger
