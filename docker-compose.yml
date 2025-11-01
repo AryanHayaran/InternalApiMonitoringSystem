@@ -11,6 +11,7 @@ services:
     networks:
       - monitoring_network
 
+
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka
