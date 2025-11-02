@@ -11,4 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "app/infrastructure/kafka/consumer.py"]
+# Add app directory to PYTHONPATH so imports like `from app.core.config import Config` work
+ENV PYTHONPATH=/app
+
+CMD ["python", "-m", "app.services.healthConsumer"]

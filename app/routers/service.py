@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Response
 from app.core.security import get_current_user_uid
 from ..utils.connect import db
 from ..services.service import ApiService
-from ..utils.response_handler import success_response, error_response
 from ..utils.loggers import get_logger
 from typing import List
 from ..schemas.service import (
@@ -14,7 +13,7 @@ from ..schemas.service import (
     ApiServiceDetailModal,
     ServiceIdResponse
 )
-
+import json
 router = APIRouter()
 api_services = ApiService()
 get_db_session = db.get_db_session
@@ -90,6 +89,7 @@ async def get_service(
 ):
     try:
         service_data = await api_services.get_service_by_id(user_uid, service_id, session)
+        logger.debug("Fetched service data for service %s: %s", service_id, service_data)
         response.status_code = 200
         return {
             "success": True,
@@ -117,6 +117,8 @@ async def get_service_details(
     try:
         logger.info("Fetching detailed info for service %s for user %s", service_id, user_uid)
         service_data = await api_services.get_service_detail_by_id(user_uid, service_id, session)
+        
+                
         response.status_code = 200
         return {
             "success": True,

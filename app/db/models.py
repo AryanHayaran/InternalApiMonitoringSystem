@@ -56,7 +56,7 @@ class MonitoredEndpoints(SQLModel, table=True):
     url: str = Field(nullable=False)
 
     request_headers: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSONB)
-    request_body: Optional[str] = Field(default=None)
+    request_body: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSONB)
 
     check_interval_seconds: int = Field(default=60, nullable=False)
     expected_status_code: int = Field(nullable=False)
@@ -85,6 +85,8 @@ class MonitoredEndpoints(SQLModel, table=True):
         foreign_key="users.id",
         nullable=False
     )
+
+    last_checked_at: Optional[datetime] = Field(default=None)
 
 
 class HealthCheckLogs(SQLModel, table=True):

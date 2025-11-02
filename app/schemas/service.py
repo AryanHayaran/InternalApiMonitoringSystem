@@ -25,8 +25,20 @@ class ApiServiceModal(BaseModel):
     http_method: str = "GET"
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
-    request_body: Optional[Union[Dict[str, Any], list]] = None 
-    check_interval_seconds: Optional[int] = 60
+    request_body: Optional[Any] = None
+    periodic_summary_report: Optional[int] = 60
+    expected_latency_ms: Optional[int] = 200
+    expected_status_code: Optional[int] = 200
+    response_validation: Optional[Dict[str, Any]] = None
+
+class ApiProducerServiceModal(BaseModel):
+    id: UUID
+    name: str
+    http_method: str = "GET"
+    url: HttpUrl
+    request_headers: Optional[Dict[str, str]] = None
+    request_body: Optional[Any] = None
+    periodic_summary_report: Optional[int] = 60
     expected_status_code: Optional[int] = 200
     response_validation: Optional[Dict[str, Any]] = None
 
@@ -67,10 +79,11 @@ class ApiServiceDetailModal(BaseModel):
     http_method: str
     url: HttpUrl
     request_headers: Optional[Dict[str, str]] = None
-    request_body: Optional[str] = None
-    check_interval_seconds: int
+    request_body: Optional[Dict[str, Any]] = None
+    periodic_summary_report: int
     expected_status_code: int
     response_validation: Optional[Dict[str, Any]] = None
+    expected_latency_ms: int
 
     # Health check info
     is_healthy: bool
@@ -88,4 +101,35 @@ class ApiResponseModal(BaseModel):
     status_code : Optional[int] = None
     response_body : Optional[Any] = None
     error_message : Optional[str] = None
+
+
+class ProducerResultModal(BaseModel):
+    id: UUID
+    checked_at: datetime
+    response_time_ms: Optional[int] = None
+    status_code: Optional[int] = None
+
+class ApiClientLogs(BaseModel):
+    id: UUID
+    checked_at: datetime
+    response_time_ms: Optional[int] = None
+    status_code: Optional[int] = None
+    is_healthy: bool
+    response_body : Optional[Any] = None
+    error_message: Optional[str] = None
+
+class ConsumerMonitoringData(BaseModel):
+    id: UUID
+    name: str
+    http_method: str = "GET"
+    expected_status_code: Optional[int] 
+    expected_latency_ms: Optional[int] 
+
+class ApiLastThreeRecords(BaseModel):
+    id: int
+    is_healthy: bool
+    checked_at: datetime
+    response_time_ms: int
+    status_code: Optional[int]
+
 

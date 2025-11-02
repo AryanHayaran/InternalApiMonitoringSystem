@@ -7,7 +7,6 @@ from app.core.security import get_current_user_uid, verify_password, create_acce
 from datetime import datetime, timedelta
 from app.core.config import Config
 from fastapi.responses import JSONResponse
-from app.utils.response_handler import success_response, error_response
 from app.schemas.auth import AuthResponse
 from app.utils.connect import db
 from fastapi import status
