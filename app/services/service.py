@@ -309,16 +309,24 @@ class ApiService:
         rows = result.fetchall()
         return [dict(row._mapping) for row in rows]
 
-    async def createOrUpdateIncident(self, session: AsyncSession, endpoint_id: str, last_three_records):
-        """Create or update incident record intelligently based on overlap."""
+    async def createOrUpdateIncident(self, session: AsyncSession, endpoint_id: str, last_three_records, reason: str):
+        """Create or update incident record for failure or latency, using initial_error to determine type."""
         try:
-            # 1️⃣ Calculate start and end time from last 3 records
-            start_time = last_three_records[-1]["checked_at"]  # oldest
-            end_time = last_three_records[0]["checked_at"]      # newest
+            # Error text mapping
+            error_message = (
+                "The API failed to respond successfully for three consecutive checks, indicating a possible outage or functional issue."
+                if reason == "failure"
+                else
+                "The API response time exceeded the expected performance threshold for three consecutive checks, suggesting performance degradation or server slowdown."
+            )
 
-            # 2️⃣ Fetch the latest incident for this endpoint
+            # Start & end times from last 3 checks
+            start_time = last_three_records[-1]["checked_at"]
+            end_time   = last_three_records[0]["checked_at"]
+
+            # Fetch last incident for this endpoint
             last_incident_query = text("""
-                SELECT id, start_time, end_time
+                SELECT id, start_time, end_time, initial_error
                 FROM incidents
                 WHERE endpoint_id = :endpoint_id
                 ORDER BY start_time DESC
@@ -327,23 +335,26 @@ class ApiService:
             result = await session.execute(last_incident_query, {"endpoint_id": endpoint_id})
             last_incident = result.fetchone()
 
-            # 3️⃣ Decision: update existing or create new
             if last_incident:
-                last_end_time = last_incident.end_time
+                last_end = last_incident.end_time
+                last_error = last_incident.initial_error or ""
 
-                # If new start overlaps or touches previous incident period
-                if last_end_time is None or start_time <= last_end_time:
+                # Only merge if last incident type matches current reason
+                if last_error == error_message and (last_end is None or start_time <= last_end):
                     update_query = text("""
                         UPDATE incidents
-                        SET end_time = :new_end_time
+                        SET end_time = :new_end_time,
+                            initial_error = :initial_error
                         WHERE id = :id;
                     """)
                     await session.execute(update_query, {
                         "new_end_time": end_time,
+                        "initial_error": error_message,
                         "id": last_incident.id
                     })
-                    logger.info(f"Updated existing incident for endpoint {endpoint_id}")
+                    logger.info(f"Incident updated for endpoint {endpoint_id} ({reason})")
                 else:
+                    # Different type or ended → create new incident
                     insert_query = text("""
                         INSERT INTO incidents (endpoint_id, start_time, end_time, initial_error)
                         VALUES (:endpoint_id, :start_time, :end_time, :initial_error);
@@ -352,11 +363,11 @@ class ApiService:
                         "endpoint_id": endpoint_id,
                         "start_time": start_time,
                         "end_time": end_time,
-                        "initial_error": ""
+                        "initial_error": error_message
                     })
-                    logger.info(f"Created new incident for endpoint {endpoint_id}")
+                    logger.info(f"New incident created for endpoint {endpoint_id} ({reason})")
             else:
-                # No previous incident at all
+                # No incident ever → create first one
                 insert_query = text("""
                     INSERT INTO incidents (endpoint_id, start_time, end_time, initial_error)
                     VALUES (:endpoint_id, :start_time, :end_time, :initial_error);
@@ -365,9 +376,9 @@ class ApiService:
                     "endpoint_id": endpoint_id,
                     "start_time": start_time,
                     "end_time": end_time,
-                    "initial_error": ""
+                    "initial_error": error_message
                 })
-                logger.info(f"Created first incident for endpoint {endpoint_id}")
+                logger.info(f"First incident created for endpoint {endpoint_id} ({reason})")
 
             await session.commit()
 
