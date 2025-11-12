@@ -32,8 +32,18 @@ class Settings(BaseSettings):
     SECRET_KEY: str ="change-this-secret"
     ACCESS_TOKEN_EXPIRY: int = 3600  # in seconds
     REFRESH_TOKEN_EXPIRY: int = 1  # in days
-    
-    
+
+    SMTP_SERVER: Optional[str] = None
+    Port: Optional[int] = None
+    Login: Optional[str] = None
+    Password: Optional[str] = None
+
+    BREVO_SMTP_SERVER: Optional[str] = None
+    BREVO_SMTP_PORT: Optional[int] = None
+    BREVO_SMTP_USERNAME: Optional[str] = None
+    BREVO_SMTP_PASSWORD: Optional[str] = None
+    SENDER_EMAIL: Optional[str] = None
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8",extra="ignore")
 
 Config = Settings()

@@ -52,4 +52,4 @@ websockets==15.0.1
 win32_setctime==1.2.0
 apscheduler==3.10.4
 aiokafka==0.10.0
-
+aiosmtplib==5.0.0

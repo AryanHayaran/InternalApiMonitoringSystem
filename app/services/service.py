@@ -15,7 +15,7 @@ class ApiService:
     async def get_services(self, user_uid: str, session: AsyncSession):
         """Fetch all monitored endpoints for a user with latest health info."""
         query = text("""
-            SELECT me.name, me.http_method, hcl.is_healthy, hcl.response_time_ms
+            SELECT me.id,me.name, me.http_method, hcl.is_healthy, hcl.response_time_ms
             FROM monitored_endpoints me
             LEFT JOIN LATERAL (
                 SELECT *
@@ -147,7 +147,6 @@ class ApiService:
                 "Error fetching service detail for %s: %s", service_id, e, exc_info=True
             )
             raise
-
 
     async def update_service(self, user_uid: str, service_id: str, api_service_data, session: AsyncSession):
         """Update service info."""

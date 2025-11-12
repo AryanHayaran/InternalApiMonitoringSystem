@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from .utils.connect import db
 from .routers import auth, service
@@ -69,8 +70,30 @@ app = FastAPI(
     title="Internal API Monitoring System",
     description="API for monitoring internal services",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/api/docs",        # Swagger UI at /api/docs
+    redoc_url="/api/redoc",      # ReDoc at /api/redoc
+    openapi_url="/api/openapi.json"  # Raw OpenAPI spec
 )
+
+# 👇 Add this CORS setup
+origins = [
+    "http://localhost:5173",   
+    "http://127.0.0.1:5173",  
+    "http://localhost:5174",   
+    "http://127.0.0.1:5174",  
+    "https://685ed0ce8158.ngrok-free.app"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 
 app.add_middleware(TokenRefreshMiddleware)
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
