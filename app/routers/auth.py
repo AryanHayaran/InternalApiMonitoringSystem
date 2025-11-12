@@ -91,10 +91,11 @@ async def login_user(response: Response, login_data: UserLogin, session: AsyncSe
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=False,  # True in production with HTTPS
-            samesite="lax",
+            samesite="lax",   # cross-origin cookies need this
+            secure=False,      # localhost = no HTTPS
             max_age=Config.ACCESS_TOKEN_EXPIRY,
         )
+
 
         logger.info("User logged in successfully: %s", user["email"])
         response.status_code = 200

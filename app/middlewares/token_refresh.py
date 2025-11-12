@@ -11,8 +11,13 @@ get_db_session = db.get_db_session
 user_services =  UserServices()
 class TokenRefreshMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+ 
         # Skip login/logout routes
-        if request.url.path in ["/api/auth/login","/api/auth/signup", "api/services/health"]:
+        if request.url.path in ["/api/auth/login","/api/auth/signup", "api/services/health", "/api/docs", "/api/redoc", "/api/openapi.json"]:
             return await call_next(request)
 
         access_token = request.cookies.get("access_token")
@@ -54,9 +59,10 @@ class TokenRefreshMiddleware(BaseHTTPMiddleware):
             key="access_token",
             value=new_access_token,
             httponly=True,
-            secure=False,
-            samesite="lax",
+            samesite="lax",   # cross-origin cookies need this
+            secure=False,      # localhost = no HTTPS
             max_age=Config.ACCESS_TOKEN_EXPIRY,
         )
+
         request.state.user = refresh_data["user"]
         return response

@@ -68,7 +68,7 @@ class HealthConsumer:
         all_failed = all(not record["is_healthy"] for record in last_three_records)
         if all_failed:
             logger.warning(f"⚠️ {api_details.name} failed 3 consecutive checks.")
-            await self.createOrUpdateIncident(session, endpoint_id, last_three_records, reason="failure")
+            await api_service.createOrUpdateIncident(session, endpoint_id, last_three_records, reason="failure")
         else:
             logger.info(f"{api_details.name}: Some requests were healthy — skipping failure incident.")
 
@@ -83,7 +83,7 @@ class HealthConsumer:
 
         if high_latency_count == 3:
             logger.warning(f"⚠️ {api_details.name} exceeded latency in last 3 checks.")
-            await self.createOrUpdateIncident(session, endpoint_id, last_three_records, reason="latency")
+            await api_service.createOrUpdateIncident(session, endpoint_id, last_three_records, reason="latency")
         else:
             logger.info(f"{api_details.name}: Latency spike not consistent — skipping latency incident.")
 

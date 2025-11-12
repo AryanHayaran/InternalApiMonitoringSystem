@@ -49,6 +49,7 @@ class ServiceIdResponse(BaseModel):
     service_id: str  # used for create/update responses
 
 class ServicesResponse(BaseModel):  
+    id: UUID
     name: str
     http_method: str
     is_healthy: Optional[bool] = None
@@ -87,7 +88,7 @@ class ApiServiceDetailModal(BaseModel):
 
     # Health check info
     is_healthy: bool
-    last_checked: Optional[datetime] = None
+    checked_at: Optional[datetime] = None
     response_time_ms: Optional[int] = None
     status_code: Optional[int] = None
 
