@@ -4,7 +4,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.auth import UserCreate
 from app.core.security import get_password_hash
-
+import jwt
+from app.core.config import Config
+from app.core.security import _get_jwt_algorithm, decode_token, create_access_token
+from datetime import datetime   
 
 class UserServices:
 
@@ -84,3 +87,32 @@ class UserServices:
         """)
         result = await session.execute(query, {"user_id": user_id})
         return result.scalar_one_or_none()
+
+    async def validate_refresh_token(self, refresh_token: str, session: AsyncSession) -> Optional[str]:
+        """Validate refresh token and return new access token."""
+        try:
+            decoded = jwt.decode(
+                refresh_token.split(" ")[1],
+                Config.SECRET_KEY,
+                algorithms=[_get_jwt_algorithm()],
+                options={"verify_exp": False},  # ignore expiry
+            )
+            user_id = decoded["user"]["user_uid"]
+        except Exception:
+            return None
+        
+        db_refresh_token = await self.get_refresh_token_for_user(user_id, session)
+        if not db_refresh_token:
+            return None
+
+        refresh_data = decode_token(db_refresh_token)
+        if (
+            not refresh_data
+            or datetime.fromtimestamp(refresh_data["exp"]) < datetime.utcnow()
+        ):
+            await self.delete_user_refresh_tokens(user_id, session) 
+            return None
+
+        # Generate new access token
+        new_access_token = create_access_token(user_data=refresh_data["user"])
+        return f"Bearer {new_access_token}"
