@@ -7,13 +7,15 @@ from typing import Optional, Dict, Any
 
 
 class Users(SQLModel, table=True):
+    __tablename__ = "users"
+
     id: UUID = Field(
         default=None,
         primary_key=True,
         sa_type=pgUUID,
         sa_column_kwargs={
             "nullable": False,
-            "server_default": text("gen_random_uuid()")
+            "server_default": text("uuid_generate_v4()")
         }
     )
 
@@ -40,6 +42,7 @@ class Users(SQLModel, table=True):
     refresh_token: Optional[str] = Field(default=None, sa_column_kwargs={"unique": True})
     
 class MonitoredEndpoints(SQLModel, table=True):
+    __tablename__ = "monitored_endpoints"
 
     id: UUID = Field(
         default=None,
@@ -58,9 +61,10 @@ class MonitoredEndpoints(SQLModel, table=True):
     request_headers: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSONB)
     request_body: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSONB)
 
-    check_interval_seconds: int = Field(default=60, nullable=False)
+    periodic_summary_report: int = Field(default=60, nullable=False)
     expected_status_code: int = Field(nullable=False)
     response_validation: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSONB)
+    expected_latency_ms: int = Field(nullable=False)
 
     is_active: bool = Field(default=True, nullable=False)
 
@@ -86,10 +90,17 @@ class MonitoredEndpoints(SQLModel, table=True):
         nullable=False
     )
 
-    last_checked_at: Optional[datetime] = Field(default=None)
+    last_checked_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column_kwargs={
+            "nullable": False,
+            "server_default": text("now()")
+        }
+    )
 
 
 class HealthCheckLogs(SQLModel, table=True):
+    __tablename__ = "health_check_logs"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     endpoint_id: UUID = Field(
@@ -114,6 +125,7 @@ class HealthCheckLogs(SQLModel, table=True):
 
 
 class Incidents(SQLModel, table=True):
+    __tablename__ = "incidents"
 
     id: UUID = Field(
         default=None,

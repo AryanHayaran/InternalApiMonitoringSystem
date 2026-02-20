@@ -2,7 +2,7 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.auth import UserServices
-from app.schemas.auth import UserCreate, UserResponse, UserLogoutResponse, UserLogin, UserRefresh, UserResponseRefreshToken
+from app.schemas.auth import UserCreate, UserResponse,UserResponseSignup, UserLogoutResponse, UserLogin, UserRefresh, UserResponseRefreshToken
 from app.core.security import get_current_user_uid, verify_password, create_access_token, _get_jwt_algorithm
 from datetime import datetime, timedelta
 from app.core.config import Config
@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 get_db_session = db.get_db_session
 
-@router.post("/signup", response_model=UserResponse)
+@router.post("/signup", response_model=UserResponseSignup)
 async def signup_user(response: Response, user_data: UserCreate, session: AsyncSession = Depends(get_db_session)):
     try:
         # Check if user already exists

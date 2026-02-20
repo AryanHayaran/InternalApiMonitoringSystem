@@ -106,7 +106,7 @@ def decode_url_safe_token(token: str):
         logging.error(f"URLSafeToken decode error: {e}")
 
 def get_current_user_uid(request: Request):
-    access_token = request.cookies.get("access_token")
+    access_token = request.headers.get("Authorization").split(" ")[1]
     if access_token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

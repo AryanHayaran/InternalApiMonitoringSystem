@@ -32,6 +32,9 @@ class UserDataLoginResponse(SQLModel):
 class UserResponse(AuthResponse[UserDataLoginResponse]):
     pass
 
+class UserResponseSignup(AuthResponse[dict]):
+    pass
+
 class UserLogoutResponse(AuthResponse[dict]):
     pass
 
