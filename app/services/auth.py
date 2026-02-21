@@ -80,4 +80,4 @@ class UserServices:
 
         # Generate new access token
         new_access_token = create_access_token(user_data=refresh_data["user"])
-        return f"Bearer {new_access_token}"
+        return new_access_token

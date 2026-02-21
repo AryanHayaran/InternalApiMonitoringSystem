@@ -95,8 +95,8 @@ async def login_user(response: Response, login_data: UserLogin, session: AsyncSe
             "data": {
                 "email": user["email"],
                 "uid": str(user["id"]),
-                "access_token": f"Bearer {access_token}",
-                "refresh_token": f"Bearer {refresh_token}"
+                "access_token": access_token,
+                "refresh_token": refresh_token
             }
         }
 
