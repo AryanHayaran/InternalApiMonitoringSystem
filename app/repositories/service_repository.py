@@ -230,13 +230,13 @@ class ApiServiceRepository:
 
     async def update_api_logs(self, data):
         query = HealthCheckLogs(    
-            endpoint_id=data.endpoint_id,
+            endpoint_id=data.id,
             checked_at=data.checked_at,
             is_healthy=data.is_healthy,
             response_time_ms=data.response_time_ms,
             status_code=data.status_code,
-            response_body=data.response_body,
-            error_message=data.error_message
+            response_body=str(data.response_body) if data.response_body else None,
+            error_message=str(data.error_message) if data.error_message else None
         )
         self.session.add(query)
         await self.session.commit()

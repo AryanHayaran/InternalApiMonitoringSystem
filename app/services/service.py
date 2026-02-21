@@ -115,7 +115,10 @@ class ApiService:
     async def get_all_api_services(self, session: AsyncSession):
         """Fetch all monitored endpoints."""
         api_service_repository = ApiServiceRepository(session=session)
-        services = await api_service_repository.get_all_api_services()
+        services = await api_service_repository.get_all_services()
+        
+        # Pydantic will serialize the dictionary list correctly into ApiProducerServiceModal
+        # at the router/monitoring service layer.
         return services
 
     async def update_api_logs(self, session: AsyncSession, data: ApiClientLogs):
