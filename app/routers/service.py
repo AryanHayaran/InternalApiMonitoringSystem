@@ -13,7 +13,7 @@ from ..schemas.service import (
     ApiServiceDetailModal,
     ServiceIdResponse
 )
-import json
+
 router = APIRouter()
 api_services = ApiService()
 get_db_session = db.get_db_session
