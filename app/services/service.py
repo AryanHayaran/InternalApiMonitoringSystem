@@ -2,9 +2,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
-import json
 from ..utils.loggers import get_logger
-from ..schemas.service import ApiServiceModal,ApiProducerServiceModal, ApiClientLogs, ConsumerMonitoringData
+from ..schemas.service import ApiClientLogs
 from ..repositories.service_repository import ApiServiceRepository
 
 logger = get_logger("app")

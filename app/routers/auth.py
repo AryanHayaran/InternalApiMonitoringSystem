@@ -1,16 +1,10 @@
-import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.auth import UserServices
 from app.schemas.auth import UserCreate, UserResponse,UserResponseSignup, UserLogoutResponse, UserLogin, UserRefresh, UserResponseRefreshToken
-from app.core.security import get_current_user_uid, verify_password, create_access_token, _get_jwt_algorithm
-from datetime import datetime, timedelta
-from app.core.config import Config
-from fastapi.responses import JSONResponse
-from app.schemas.auth import AuthResponse
+from app.core.security import get_current_user_uid, verify_password, create_access_token
 from app.utils.connect import db
 from fastapi import status
-import jwt
 
 router = APIRouter()
 api_services = UserServices()
@@ -137,7 +131,6 @@ async def logout_user(response: Response, user_uid: str = Depends(get_current_us
 @router.post("/refresh",response_model=UserResponseRefreshToken)
 async def refresh_token(response: Response,Refresh_data: UserRefresh, session: AsyncSession = Depends(get_db_session)):
     try:
-        
         access_token = await api_services.validate_refresh_token(Refresh_data.refresh_token, session)
         if not access_token:
             response.status_code = 401
