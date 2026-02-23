@@ -1,4 +1,3 @@
-import asyncio
 import json
 from aiokafka import AIOKafkaConsumer
 from aiokafka.errors import KafkaError
@@ -6,7 +5,6 @@ from app.core.config import Config
 from app.utils.loggers import get_logger
 
 logger = get_logger()
-
 
 class KafkaConsumerClient:
     """Core Kafka consumer — reads and yields messages asynchronously."""
@@ -16,7 +14,6 @@ class KafkaConsumerClient:
         self.topic_name = Config.KAFKA_TOPIC_NAME
         self.broker_url = Config.KAFKA_BROKER_URL
         self.group_id = "monitoring_consumer_group"
-        self.is_connected = False
 
     async def connect(self):
         """Connect to Kafka broker."""
@@ -30,12 +27,11 @@ class KafkaConsumerClient:
             value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         )
         await self.consumer.start()
-        self.is_connected = True
         logger.info(f"Kafka consumer connected and listening to topic: {self.topic_name}")
 
     async def consume_messages(self):
         """Async generator that yields Kafka messages one by one."""
-        if not self.consumer or not self.is_connected:
+        if not self.consumer:
             await self.connect()
 
         try:
@@ -51,8 +47,7 @@ class KafkaConsumerClient:
 
     async def close(self):
         """Gracefully close Kafka connection."""
-        if self.consumer and self.is_connected:
+        if self.consumer:
             logger.info("Closing Kafka consumer...")
             await self.consumer.stop()
-            self.is_connected = False
             logger.info("Kafka consumer closed successfully.")
