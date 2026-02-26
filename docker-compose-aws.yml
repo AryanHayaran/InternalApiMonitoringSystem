@@ -1,0 +1,129 @@
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    ports:
+      - "9092:9092"     # Host access (Postman if needed)
+      - "29092:29092"   # Internal Docker access
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_LOG4J_LOGGERS: "org.apache.kafka.image.loader.MetadataLoader=WARN"
+      KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m"   # Limit JVM heap for t2.micro (1GB RAM)
+    networks:
+      - monitoring_network
+
+  postgres:
+    image: postgres:16
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${PGDATABASE}
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring_network
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: app/docker/Dockerfile
+    container_name: monitoring_api
+    restart: always
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKER_URL: kafka:29092
+      KAFKA_TOPIC_NAME: api-monitoring-results
+      KAFKA_MAX_RETRIES: 5
+      KAFKA_RETRY_DELAY_S: 2
+      KAFKA_ENABLE_IDEMPOTENCE: "true"
+      KAFKA_ACKS: all
+      KAFKA_COMPRESSION_TYPE: gzip
+    ports:
+      - "8000:8000"   # Your FastAPI for Postman
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - monitoring_network
+
+  consumer:
+    build:
+      context: .
+      dockerfile: app/docker/Dockerfile.consumer
+    container_name: alert_consumer
+    restart: always
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGPORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKER_URL: kafka:29092
+      KAFKA_TOPIC_NAME: api-monitoring-results
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - monitoring_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  monitoring_network:
+    driver: bridge
