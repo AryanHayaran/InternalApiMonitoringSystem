@@ -14,34 +14,14 @@ class Producer:
     def __init__(self):
         pass  # no async in __init__
 
-    async def get_db_session(self):
-        """Obtain a single AsyncSession from a fresh generator."""
-        session_gen = db.get_db_session()
-        try:
-            session = await anext(session_gen)
-            return session
-        except StopAsyncIteration:
-            logger.error(
-                "Failed to get a database session: generator exhausted")
-        except Exception as e:
-            logger.error(
-                f"Unexpected error obtaining DB session: {e}", exc_info=True)
-        finally:
-            await session_gen.aclose()
-        return None
-        
-
     async def get_all_api(self) -> List[ApiProducerServiceModal]:
-        """Fetch all monitored endpoints safely using get_db_session."""
+        """Fetch all monitored endpoints safely."""
         services_to_check: List[ApiProducerServiceModal] = []
-        session = await self.get_db_session()
-        if not session:
-            return []
-
         try:
-            services_to_check = await api_service.get_all_api_services(session=session)
-            logger.info(
-                f"Fetched {len(services_to_check)} services from the database.")
+            async with db.pg_session_factory() as session:
+                services_to_check = await api_service.get_all_api_services(session=session)
+                logger.info(
+                    f"Fetched {len(services_to_check)} services from the database.")
         except Exception as e:
             logger.error(
                 f"Failed to fetch services from database: {e}", exc_info=True)
@@ -94,10 +74,8 @@ class Producer:
                     status_code=health_data.status_code,
                     error_message=health_data.error_message 
                 )
-                session = await self.get_db_session()
-                if not session:
-                    return []
-                await api_service.update_api_logs(session, update_logs)
+                async with db.pg_session_factory() as session:
+                    await api_service.update_api_logs(session, update_logs)
 
             except Exception as e:
                 logger.error(f"Error checking service {service.name} at {service.url}: {e}", exc_info=True)

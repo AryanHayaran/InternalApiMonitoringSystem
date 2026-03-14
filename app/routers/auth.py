@@ -104,7 +104,7 @@ async def login_user(response: Response, login_data: UserLogin, session: AsyncSe
         }
 
 
-@router.get("/logout", response_model=UserLogoutResponse)
+@router.post("/logout", response_model=UserLogoutResponse)
 async def logout_user(response: Response, user_uid: str = Depends(get_current_user_uid), session: AsyncSession = Depends(get_db_session)):
     try:
         # Delete refresh tokens

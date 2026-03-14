@@ -28,14 +28,18 @@ class TokenRefreshMiddleware(BaseHTTPMiddleware):
             "/api/auth/login",
             "/api/auth/signup",
             "/api/auth/refresh",
-            "api/services/health",
+            "/api/services/health",
             "/api/docs",
             "/api/redoc",
             "/api/openapi.json",
         ]:
             return await call_next(request)
 
-        access_token = request.headers.get("Authorization").split(" ")[1]
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            return JSONResponse({"detail": "Token is not present"}, status_code=401)
+
+        access_token = auth_header.split(" ")[1] if " " in auth_header else None
         if access_token:
             token_data = decode_token(access_token)
             if token_data:

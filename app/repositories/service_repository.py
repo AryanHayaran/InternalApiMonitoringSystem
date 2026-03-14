@@ -183,11 +183,10 @@ class ApiServiceRepository:
         ).where(
             MonitoredEndpoints.id == service_id,
             MonitoredEndpoints.owner_user_id == self.user_uid
-        ).order_by(HealthCheckLogs.checked_at.desc())
+        ).order_by(HealthCheckLogs.checked_at.desc()).limit(30)
 
         result = await self.session.execute(query)
         rows = result.mappings().all()
-        print(rows)
         
         return [{**row, "id": str(row["id"])} for row in rows]
 
