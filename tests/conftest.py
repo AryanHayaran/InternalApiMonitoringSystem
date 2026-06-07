@@ -45,19 +45,23 @@ def auth_token(api_client):
     """
 
     # Signup
-    payload = test_user()
+    user = {
+        "email": f"test_{uuid.uuid4().hex[:8]}@gmail.com",
+        "password": "Test@123",
+        "full_name": "Pytest User"
+    }
 
     api_client.post(
         "/api/auth/signup",
-        json=payload
+        json=user
     )
 
-    # Login
+    # Login via FastAPI's /api/auth prefix
     login_response = api_client.post(
         "/api/auth/login",
         json={
-            "email": test_user["email"],
-            "password": test_user["password"]
+            "email": user["email"],
+            "password": user["password"]
         }
     )
 
@@ -68,40 +72,51 @@ def auth_token(api_client):
     return token
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")  # Changed scope to module to allow service_id to use it
 def auth_headers(auth_token):
     """
     Authorization header used in all
     authenticated service APIs.
     """
-
     return {
         "Authorization": f"Bearer {auth_token}"
     }
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def service_id(api_client, auth_headers):
     """
     Creates a fresh service for each test.
     Returns service id.
     """
-
-    payload = {
-        "name": "Google Test Service",
-        "url": "https://google.com",
-        "method": "GET",
-        "check_interval_seconds": 60
+    request_body = {
+        "name": "DummyJSON Auth Login Service",
+        "http_method": "POST",
+        "url": "https://dummyjson.com/auth/login",
+        "request_headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        },
+        "request_body": {
+            "username": "emilys",
+            "password": "emilyspass"
+        },
+        "periodic_summary_report": 30,
+        "expected_latency_ms": 500,
+        "expected_status_code": 200,
+        "response_validation": {
+            "json_path": "$.accessToken",
+            "expected_value": "null"
+        }
     }
 
     response = api_client.post(
-        "/service",
-        json=payload,
+        "/api/services/service",
+        json=request_body,
         headers=auth_headers
     )
 
-    assert response.status_code in [200, 201]
+    assert response.status_code == 201
 
     service_id = response.json()["data"]["service_id"]
-
     yield service_id
