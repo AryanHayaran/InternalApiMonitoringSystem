@@ -1,97 +1,107 @@
-import pytest
-import pytest_asyncio
-from unittest.mock import AsyncMock, patch
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import AsyncSession
-import asyncio
+# tests/conftest.py
 
-from app.main import app
-from app.utils.connect import db
-from app.services.auth import UserServices
-from app.schemas.auth import UserCreate
+import uuid
+import os
+import httpx
+import pytest
+
+# Retrieve the API Base URL from the environment, defaulting to localhost:8000
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for each test case."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def init_db_connection():
-    """Initialize DB connection once for the entire test session."""
-    await db.init_db()
-    yield
-    await db.close_db()
-
-@pytest_asyncio.fixture()
-async def session():
+def api_client():
     """
-    Yields an AsyncSession wrapped in a transaction that is rolled back after the test.
-    This prevents test data from polluting the real database.
+    Shared HTTP client for all tests.
+    Created once for entire pytest run.
     """
-    async with db.pg_engine.connect() as conn:
-        trans = await conn.begin()
-        async_session = AsyncSession(conn, expire_on_commit=False)
-        yield async_session
-        await trans.rollback()
-        await async_session.close()
+    client = httpx.Client(
+        base_url=BASE_URL,
+        timeout=30.0
+    )
+    yield client
+    client.close()
 
-@pytest_asyncio.fixture()
-async def test_client(session):
+
+@pytest.fixture(scope="module")
+def test_user():
     """
-    FastAPI TestClient that overrides the database dependency.
+    Generates a unique user for signup tests.
+    Fresh user for every test module.
     """
-    async def override_get_db():
-        yield session
-
-    app.dependency_overrides[db.get_db_session] = override_get_db
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield client
-
-    app.dependency_overrides.clear()
-
-@pytest.fixture(autouse=True)
-def mock_kafka():
-    """Mock Kafka producer methods globally so tests don't try to connect to Kafka."""
-    with patch("app.infrastructure.kafka.producer.KafkaProducerClient.connect", new_callable=AsyncMock) as mock_connect:
-        with patch("app.infrastructure.kafka.producer.KafkaProducerClient.send_result", new_callable=AsyncMock) as mock_send:
-            with patch("app.infrastructure.kafka.producer.KafkaProducerClient.close", new_callable=AsyncMock) as mock_close:
-                mock_send.return_value = True
-                yield
-
-@pytest.fixture(autouse=True)
-def mock_mail():
-    """Mock BrevoSMTP email sending globally."""
-    with patch("app.utils.mail.aiosmtplib.send", new_callable=AsyncMock) as mock_send:
-        yield mock_send
-
-@pytest_asyncio.fixture()
-async def test_user_headers(test_client, session):
-    """Creates a user, logs them in, and returns authorization headers."""
-    user_data = {
-        "full_name": "Test User",
-        "email": "testuser@example.com",
-        "password": "StrongPassword123!"
+    unique_id = uuid.uuid4().hex[:8]
+    return {
+        "email": f"test_{unique_id}@gmail.com",
+        "password": "Test@123",
+        "full_name": "Pytest User"
     }
-    # Create user
-    api_services = UserServices()
-    await api_services.create_user(UserCreate(**user_data), session)
+
+
+@pytest.fixture(scope="module")
+def auth_token(api_client):
+    """
+    Creates one user and logs in once.
+    Reused across all service tests.
+    """
+
+    # Signup
+    payload = test_user()
+
+    api_client.post(
+        "/api/auth/signup",
+        json=payload
+    )
 
     # Login
-    response = await test_client.post("/api/auth/login", json={
-        "email": user_data["email"],
-        "password": user_data["password"]
-    })
-    data = response.json()
-    access_token = data["data"]["access_token"]
-    refresh_token = data["data"]["refresh_token"]
+    login_response = api_client.post(
+        "/api/auth/login",
+        json={
+            "email": test_user["email"],
+            "password": test_user["password"]
+        }
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["data"]["access_token"]
+
+    return token
+
+
+@pytest.fixture
+def auth_headers(auth_token):
+    """
+    Authorization header used in all
+    authenticated service APIs.
+    """
 
     return {
-        "headers": {"Authorization": f"Bearer {access_token}"},
-        "refresh_token": refresh_token,
-        "user_data": user_data,
-        "uid": data["data"]["uid"]
+        "Authorization": f"Bearer {auth_token}"
     }
+
+
+@pytest.fixture(scope="session")
+def service_id(api_client, auth_headers):
+    """
+    Creates a fresh service for each test.
+    Returns service id.
+    """
+
+    payload = {
+        "name": "Google Test Service",
+        "url": "https://google.com",
+        "method": "GET",
+        "check_interval_seconds": 60
+    }
+
+    response = api_client.post(
+        "/service",
+        json=payload,
+        headers=auth_headers
+    )
+
+    assert response.status_code in [200, 201]
+
+    service_id = response.json()["data"]["service_id"]
+
+    yield service_id
