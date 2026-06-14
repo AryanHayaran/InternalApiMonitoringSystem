@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: 3.12
 
@@ -52,9 +52,10 @@ jobs:
         run: docker compose -f docker-compose-aws.yml up -d --build
 
       - name: Run database migrations
-        run: docker compose -f docker-compose-aws.yml exec -T fastapi alembic upgrade head
+        run: docker compose -f docker-compose-aws.yml exec -T fastapi sh -c "cd /app && alembic upgrade head"
 
       - name: Wait for API to be ready
+
         run: |
           curl --connect-timeout 5 \
                --retry 5 \

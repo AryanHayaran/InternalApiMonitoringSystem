@@ -16,9 +16,7 @@ build/
 
 venv/
 
-# FastAPI & Alembic
-alembic.ini
-migrations/
+
 
 # Docker
 *.pid
