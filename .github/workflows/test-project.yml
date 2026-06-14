@@ -23,9 +23,6 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: 3.9
-          cache: "pip"
-          # Tell GitHub exactly where to look to build the cache key
-          cache-dependency-path: "**/requirements.txt"
 
       - name: Install dependencies
         run: |
