@@ -48,8 +48,9 @@ jobs:
           API_BASE_URL=http://localhost:8000
           EOF
 
-      - name: Start Internal API Monitoring System
-        run: docker compose up -d --build
+      # 1. START THE ENVIRONMENT (Add the -f flag)
+      - name: Start AWS Docker Compose Environment
+        run: docker compose -f docker-compose-aws.yml up -d --build
 
       - name: Wait for API to be ready
         run: |
@@ -57,13 +58,24 @@ jobs:
                --retry 5 \
                --retry-delay 5 \
                --retry-all-errors \
-               -f http://localhost:8000/services/sevice/health
+               -f http://localhost:8000/api/services/health
 
-      - name: Install pytest
-        run: pip install pytest
+      # 2. RUN TESTS INSIDE THE CONTAINER (Add the -f flag)
+      # Notice the container name 'monitoring_api' matches your file exactly!
+      - name: Install pytest inside Docker
+        run: docker compose -f docker-compose-aws.yml exec -T monitoring_api pip install pytest
 
-      - name: Run tests
-        run: pytest tests/ -v -s
+      - name: Run tests INSIDE Docker
+        run: docker compose -f docker-compose-aws.yml exec -T monitoring_api pytest tests/ -v -s
 
-      - name: Stop Internal API Monitoring System
-        run: docker compose down -v
+      - name: Dump Logs on Failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose-aws.yml logs monitoring_api
+          docker compose -f docker-compose-aws.yml logs alert_consumer
+
+      # 3. TEARDOWN (Add the -f flag here too!)
+      # If you forget the -f flag here, Docker won't know which network/volumes to destroy.
+      - name: Stop AWS Environment
+        if: always()
+        run: docker compose -f docker-compose-aws.yml down -v
