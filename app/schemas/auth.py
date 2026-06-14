@@ -9,13 +9,14 @@ class AuthResponse(GenericModel, Generic[DataT]):
     message: str
     data: Optional[DataT] = None
 
+
 class UserCreate(SQLModel):
     full_name: str
-    email: str
+    email: EmailStr  # Changed from str to EmailStr
     password: str
 
 class UserLogin(SQLModel):
-    email: str
+    email: EmailStr  # Changed from str to EmailStr
     password: str
 
 # Response Data Models

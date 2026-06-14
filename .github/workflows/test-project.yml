@@ -1,0 +1,84 @@
+name: CI/CD Pipeline for Internal API Monitoring System
+
+on:
+  push:
+    branches: [ main, staging ]
+    paths-ignore:
+      - "**.md"
+
+  pull_request:
+    branches: [ main, staging ]
+    paths-ignore:
+      - "**.md"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          cat <<EOF > .env
+          PGHOST=postgres_db
+          PGPORT=5432
+          PGDATABASE=${{ secrets.PGDATABASE }}
+          PGUSER=${{ secrets.PGUSER }}
+          PGPASSWORD=${{ secrets.PGPASSWORD }}
+          REDIS_HOST=redis_cache
+          REDIS_PORT=6379
+          KAFKA_BROKER=localhost:9092
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          JWT_ALGORITHM=HS256
+          ACCESS_TOKEN_EXPIRY=3600
+          REFRESH_TOKEN_EXPIRY=86400
+          API_BASE_URL=http://localhost:8000
+          EOF
+
+      # 1. START THE ENVIRONMENT (Add the -f flag)
+      - name: Start AWS Docker Compose Environment
+        run: docker compose -f docker-compose-aws.yml up -d --build
+
+      - name: Run database migrations
+        run: docker compose -f docker-compose-aws.yml exec -T fastapi sh -c "cd /app && alembic upgrade head"
+
+      - name: Wait for API to be ready
+
+        run: |
+          curl --connect-timeout 5 \
+               --retry 5 \
+               --retry-delay 5 \
+               --retry-all-errors \
+               -f http://localhost:8000/api/services/health
+
+      # 2. RUN TESTS INSIDE THE CONTAINER (Add the -f flag)
+      # Notice the container name 'fastapi' matches your file exactly!
+      - name: Install pytest inside Docker
+        run: docker compose -f docker-compose-aws.yml exec -T fastapi pip install pytest
+
+      - name: Run tests INSIDE Docker
+        run: docker compose -f docker-compose-aws.yml exec -T fastapi pytest tests/ -v -s
+
+      - name: Dump Logs on Failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose-aws.yml logs fastapi
+          docker compose -f docker-compose-aws.yml logs consumer
+
+      # 3. TEARDOWN (Add the -f flag here too!)
+      # If you forget the -f flag here, Docker won't know which network/volumes to destroy.
+      - name: Stop AWS Environment
+        if: always()
+        run: docker compose -f docker-compose-aws.yml down -v
