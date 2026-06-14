@@ -1,4 +1,5 @@
 import json
+import asyncio
 from aiokafka import AIOKafkaConsumer
 from aiokafka.errors import KafkaError
 from app.core.config import Config
@@ -14,9 +15,11 @@ class KafkaConsumerClient:
         self.topic_name = Config.KAFKA_TOPIC_NAME
         self.broker_url = Config.KAFKA_BROKER_URL
         self.group_id = "monitoring_consumer_group"
+        self.max_retries = Config.KAFKA_MAX_RETRIES or 5
+        self.retry_delay_s = Config.KAFKA_RETRY_DELAY_S or 2
 
     async def connect(self):
-        """Connect to Kafka broker."""
+        """Connect to Kafka broker with retries."""
         logger.info(f"Connecting Kafka consumer to broker: {self.broker_url}")
         self.consumer = AIOKafkaConsumer(
             self.topic_name,
@@ -26,8 +29,18 @@ class KafkaConsumerClient:
             auto_offset_reset="earliest",
             value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         )
-        await self.consumer.start()
-        logger.info(f"Kafka consumer connected and listening to topic: {self.topic_name}")
+        
+        for attempt in range(self.max_retries):
+            try:
+                await self.consumer.start()
+                logger.info(f"Kafka consumer connected and listening to topic: {self.topic_name}")
+                return
+            except Exception as e:
+                logger.warning(f"Consumer connection attempt {attempt + 1}/{self.max_retries} failed: {e}. Retrying in {self.retry_delay_s}s...")
+                if attempt + 1 == self.max_retries:
+                    logger.error("All Kafka consumer connection attempts failed.")
+                    raise
+                await asyncio.sleep(self.retry_delay_s)
 
     async def consume_messages(self):
         """Async generator that yields Kafka messages one by one."""
