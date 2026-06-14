@@ -22,16 +22,6 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await db.init_db()
     
-    # Auto-create tables if they do not exist
-    if db.pg_engine:
-        try:
-            from sqlmodel import SQLModel
-            from app.db.models import Users, MonitoredEndpoints, HealthCheckLogs, Incidents
-            async with db.pg_engine.begin() as conn:
-                await conn.run_sync(SQLModel.metadata.create_all)
-            logger.info("Database tables verified/created successfully.")
-        except Exception as e:
-            logger.error(f"Failed to create database tables: {e}")
     
     # Initialize Kafka producer
     try:

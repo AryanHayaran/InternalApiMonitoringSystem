@@ -51,6 +51,9 @@ jobs:
       - name: Start AWS Docker Compose Environment
         run: docker compose -f docker-compose-aws.yml up -d --build
 
+      - name: Run database migrations
+        run: docker compose -f docker-compose-aws.yml exec -T fastapi alembic upgrade head
+
       - name: Wait for API to be ready
         run: |
           curl --connect-timeout 5 \
