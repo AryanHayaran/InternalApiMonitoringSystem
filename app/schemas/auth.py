@@ -9,13 +9,14 @@ class AuthResponse(GenericModel, Generic[DataT]):
     message: str
     data: Optional[DataT] = None
 
+
 class UserCreate(SQLModel):
     full_name: str
-    email: str
+    email: EmailStr  # Changed from str to EmailStr
     password: str
 
 class UserLogin(SQLModel):
-    email: str
+    email: EmailStr  # Changed from str to EmailStr
     password: str
 
 # Response Data Models
@@ -23,8 +24,23 @@ class UserData(SQLModel):
     email: str
     uid: str  
 
-class UserResponse(AuthResponse[UserData]):
+class UserDataLoginResponse(SQLModel):
+    email: str
+    uid: str
+    access_token: str
+    refresh_token: str
+
+class UserResponse(AuthResponse[UserDataLoginResponse]):
+    pass
+
+class UserResponseSignup(AuthResponse[dict]):
     pass
 
 class UserLogoutResponse(AuthResponse[dict]):
+    pass
+
+class UserRefresh(SQLModel):
+    refresh_token: str
+
+class UserResponseRefreshToken(AuthResponse[dict]):
     pass

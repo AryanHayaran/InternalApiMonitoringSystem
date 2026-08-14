@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await db.init_db()
     
+    
     # Initialize Kafka producer
     try:
         await producer_client.connect()
@@ -82,6 +83,7 @@ origins = [
     "http://127.0.0.1:5173",  
     "http://localhost:5174",   
     "http://127.0.0.1:5174",  
+    "https://apipulsemonitor.netlify.app",
     "https://685ed0ce8158.ngrok-free.app"
 ]
 
