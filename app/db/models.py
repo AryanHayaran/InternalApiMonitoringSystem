@@ -1,7 +1,7 @@
 from uuid import UUID
 from sqlmodel import SQLModel, Field
 from sqlalchemy.dialects.postgresql import UUID as pgUUID, JSONB
-from sqlalchemy import text, TIMESTAMP
+from sqlalchemy import text, TIMESTAMP, ForeignKey, Column
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -85,9 +85,11 @@ class MonitoredEndpoints(SQLModel, table=True):
     )
 
     owner_user_id: UUID = Field(
-        sa_type=pgUUID,
-        foreign_key="users.id",
-        nullable=False
+        sa_column=Column(
+            pgUUID,
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False
+        )
     )
 
     last_checked_at: datetime = Field(
@@ -104,9 +106,11 @@ class HealthCheckLogs(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     endpoint_id: UUID = Field(
-        sa_type=pgUUID,
-        foreign_key="monitored_endpoints.id",
-        nullable=False
+        sa_column=Column(
+            pgUUID,
+            ForeignKey("monitored_endpoints.id", ondelete="CASCADE"),
+            nullable=False
+        )
     )
 
     checked_at: datetime = Field(
@@ -138,9 +142,11 @@ class Incidents(SQLModel, table=True):
     )
 
     endpoint_id: UUID = Field(
-        sa_type=pgUUID,
-        foreign_key="monitored_endpoints.id",
-        nullable=False
+        sa_column=Column(
+            pgUUID,
+            ForeignKey("monitored_endpoints.id", ondelete="CASCADE"),
+            nullable=False
+        )
     )
 
     start_time: datetime = Field(nullable=False)

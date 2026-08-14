@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await db.init_db()
     
+    
     # Initialize Kafka producer
     try:
         await producer_client.connect()

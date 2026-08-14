@@ -104,9 +104,16 @@ async def login_user(response: Response, login_data: UserLogin, session: AsyncSe
         }
 
 
-@router.post("/logout", response_model=UserLogoutResponse)
+@router.get("/logout", response_model=UserLogoutResponse)
 async def logout_user(response: Response, user_uid: str = Depends(get_current_user_uid), session: AsyncSession = Depends(get_db_session)):
     try:
+        if not user_uid:
+            response.status_code = 401
+            return {
+                "success": False,
+                "message": "Unauthorized",
+                "data": None
+            }
         # Delete refresh tokens
         await api_services.delete_user_refresh_tokens(user_uid, session)
 
