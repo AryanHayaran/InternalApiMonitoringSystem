@@ -128,6 +128,36 @@ class HealthCheckLogs(SQLModel, table=True):
     error_message: Optional[str] = None
 
 
+class EndpointMetricsHourly(SQLModel, table=True):
+    """Hourly rollup maintained by the metrics-rollup Kafka consumer group."""
+    __tablename__ = "endpoint_metrics_hourly"
+
+    endpoint_id: UUID = Field(
+        sa_column=Column(
+            pgUUID,
+            ForeignKey("monitored_endpoints.id", ondelete="CASCADE"),
+            primary_key=True,
+            nullable=False
+        )
+    )
+    hour_bucket: datetime = Field(primary_key=True, nullable=False)
+
+    total_checks: int = Field(default=0, nullable=False)
+    healthy_checks: int = Field(default=0, nullable=False)
+    sum_latency_ms: int = Field(default=0, nullable=False)
+    min_latency_ms: Optional[int] = Field(default=None)
+    max_latency_ms: Optional[int] = Field(default=None)
+    latency_buckets: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSONB)
+
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column_kwargs={
+            "nullable": False,
+            "server_default": text("now()")
+        }
+    )
+
+
 class Incidents(SQLModel, table=True):
     __tablename__ = "incidents"
 

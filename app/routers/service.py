@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, Response
+from sqlalchemy import text as sa_text
 from app.core.security import get_current_user_uid
 from ..utils.connect import db
 from ..services.service import ApiService
+from ..infrastructure.kafka.producer import producer_client
 from ..utils.loggers import get_logger
 from typing import List
 from ..schemas.service import (
@@ -21,11 +23,55 @@ logger = get_logger()
 
 @router.get("/health", response_model=ApiResponse[dict])
 async def health_check(response: Response):
+    """Liveness. Always 200 while the process is serving — CI gates on this."""
     response.status_code = 200
     return {
         "success": True,
         "message": "Health check OK",
         "data": {"status": "ok"}
+    }
+
+
+@router.get("/readyz", response_model=ApiResponse[dict])
+async def readiness_check(response: Response):
+    """
+    Readiness — actually checks the dependencies.
+
+    /health returns 200 whenever the process is up, which it did even when the Kafka
+    producer had failed every connection attempt at boot. This reports the truth:
+    503 when a hard dependency (Postgres) is unreachable. Redis and Kafka are
+    reported but do not fail readiness, since the app degrades rather than breaks
+    without them.
+    """
+    checks = {"postgres": "down", "redis": "unknown", "kafka": "down"}
+
+    try:
+        async with db.pg_session_factory() as session:
+            await session.execute(sa_text("SELECT 1"))
+        checks["postgres"] = "up"
+    except Exception as e:
+        logger.error("Readiness: postgres unreachable: %s", e)
+
+    if db.redis_client is None:
+        checks["redis"] = "not_configured"
+    else:
+        try:
+            await db.redis_client.ping()
+            checks["redis"] = "up"
+        except Exception:
+            checks["redis"] = "down"
+
+    try:
+        checks["kafka"] = "up" if await producer_client.health_check() else "down"
+    except Exception:
+        checks["kafka"] = "down"
+
+    ready = checks["postgres"] == "up"
+    response.status_code = 200 if ready else 503
+    return {
+        "success": ready,
+        "message": "Ready" if ready else "Not ready — Postgres unreachable",
+        "data": checks
     }
 
 

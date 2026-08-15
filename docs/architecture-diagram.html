@@ -1,0 +1,329 @@
+<title>Monitoring System Architecture</title>
+
+<style>
+  :root {
+    --bg:        #F4F6F9;
+    --surface:   #FFFFFF;
+    --surface-2: #EDF1F6;
+    --ink:       #0F1B2A;
+    --muted:     #5B6B80;
+    --line:      #C6D1DE;
+    --line-soft: #DDE4EC;
+    --accent:    #0F766E;
+    --good:      #15803D;
+    --warn:      #B45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #0B131E;
+      --surface:   #121E2C;
+      --surface-2: #182839;
+      --ink:       #E7EEF6;
+      --muted:     #94A6BA;
+      --line:      #2A3C51;
+      --line-soft: #223245;
+      --accent:    #2DD4BF;
+      --good:      #4ADE80;
+      --warn:      #F0A020;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:        #0B131E;
+    --surface:   #121E2C;
+    --surface-2: #182839;
+    --ink:       #E7EEF6;
+    --muted:     #94A6BA;
+    --line:      #2A3C51;
+    --line-soft: #223245;
+    --accent:    #2DD4BF;
+    --good:      #4ADE80;
+    --warn:      #F0A020;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 48px 24px 96px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+
+  header { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+  }
+  h1 { font-size: clamp(28px, 4.4vw, 42px); line-height: 1.1; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+  .lede { font-size: 17px; color: var(--muted); max-width: 64ch; margin: 0; }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: 14px; }
+  .canvas {
+    background: var(--surface); border: 1px solid var(--line-soft);
+    border-radius: 10px; padding: 20px; overflow-x: auto;
+  }
+  svg { display: block; max-width: 100%; height: auto; min-width: 780px; }
+  figcaption { font-size: 14px; color: var(--muted); max-width: 70ch; }
+
+  h2 { font-size: 20px; margin: 0 0 14px; letter-spacing: -.01em; }
+  h2 .num {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--accent); font-size: 15px; margin-right: 10px;
+  }
+  section { display: flex; flex-direction: column; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.mono, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px; font-variant-numeric: tabular-nums;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .92em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px;
+  }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 10px; padding: 18px 20px; }
+  .card h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: -.005em; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .rule { color: var(--ink); font-weight: 600; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Internal API Monitoring System</div>
+  <h1>Monitoring System Architecture</h1>
+  <p class="lede">How a health check becomes an incident. One producer, one topic, two partitions, two independent consumer groups — and the ordering rules that keep the verdicts correct.</p>
+</header>
+
+<figure>
+  <div class="canvas">
+    <svg viewBox="0 0 1000 1010" role="img"
+         aria-label="Architecture diagram: the FastAPI process probes external endpoints concurrently, writes each health check to PostgreSQL, then publishes a keyed event to a two-partition Kafka topic. Two independent consumer groups read that topic — an incident detector running two consumers, one per partition, and a single metrics rollup consumer — and both write back to PostgreSQL. A scheduled job emails digests from the incidents table. Redis holds token revocation and login rate limits.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <g fill="none" stroke="currentColor" stroke-width="1.5">
+
+        <!-- CLIENT -->
+        <rect x="30" y="24" width="240" height="50" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="46" y="46" fill="currentColor" font-size="14" font-weight="600" stroke="none">Client / Dashboard</text>
+        <text x="46" y="64" fill="var(--muted)" font-size="11.5" stroke="none">React · Postman</text>
+
+        <!-- FASTAPI -->
+        <rect x="30" y="96" width="620" height="286" rx="9" fill="none" stroke="var(--line)" stroke-dasharray="5 4"/>
+        <text x="44" y="118" fill="var(--muted)" font-size="11.5" stroke="none" font-family="ui-monospace, Menlo, monospace">monitoring_api · single replica</text>
+
+        <rect x="52" y="132" width="252" height="54" rx="6" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="66" y="153" fill="currentColor" font-size="13" font-weight="600" stroke="none">TokenRefreshMiddleware</text>
+        <text x="66" y="171" fill="var(--muted)" font-size="11.5" stroke="none">verify signature + expiry</text>
+
+        <rect x="52" y="200" width="252" height="54" rx="6" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="66" y="221" fill="currentColor" font-size="13" font-weight="600" stroke="none">Routers → Services → Repos</text>
+        <text x="66" y="239" fill="var(--muted)" font-size="11.5" stroke="none">ownership enforced in SQL</text>
+
+        <rect x="52" y="268" width="252" height="54" rx="6" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="66" y="289" fill="currentColor" font-size="13" font-weight="600" stroke="none">APScheduler</text>
+        <text x="66" y="307" fill="var(--muted)" font-size="11.5" stroke="none">60 s checks · 30 min digests</text>
+
+        <rect x="352" y="200" width="276" height="122" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="368" y="224" fill="currentColor" font-size="13" font-weight="600" stroke="none">Health-check loop</text>
+        <text x="368" y="245" fill="var(--muted)" font-size="11.5" stroke="none">asyncio.gather · Semaphore(25)</text>
+        <text x="368" y="263" fill="var(--muted)" font-size="11.5" stroke="none">shared httpx pool · keepalive 15 s</text>
+        <text x="368" y="281" fill="var(--muted)" font-size="11.5" stroke="none">20 s deadline per probe</text>
+        <text x="368" y="304" fill="var(--muted)" font-size="11.5" stroke="none">failures isolated per endpoint</text>
+
+        <!-- REDIS -->
+        <rect x="694" y="132" width="276" height="76" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="710" y="154" fill="currentColor" font-size="13" font-weight="600" stroke="none">Redis</text>
+        <text x="710" y="172" fill="var(--muted)" font-size="11.5" stroke="none">jti denylist · login rate limit</text>
+        <text x="710" y="190" fill="var(--muted)" font-size="11.5" stroke="none">fail-open · optional</text>
+
+        <!-- EXTERNAL -->
+        <rect x="694" y="244" width="276" height="62" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="710" y="268" fill="currentColor" font-size="13" font-weight="600" stroke="none">Monitored endpoints</text>
+        <text x="710" y="288" fill="var(--muted)" font-size="11.5" stroke="none">the user's external APIs</text>
+
+        <!-- POSTGRES -->
+        <rect x="30" y="432" width="300" height="522" rx="9" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <text x="48" y="460" fill="currentColor" font-size="14" font-weight="700" stroke="none">PostgreSQL</text>
+        <text x="48" y="479" fill="var(--muted)" font-size="11.5" stroke="none">source of truth</text>
+
+        <rect x="50" y="500" width="260" height="42" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="519" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">users</text>
+        <text x="64" y="535" fill="var(--muted)" font-size="11" stroke="none">monitored_endpoints</text>
+
+        <rect x="50" y="556" width="260" height="58" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="575" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">health_check_logs</text>
+        <text x="64" y="592" fill="var(--muted)" font-size="11" stroke="none">idx (endpoint_id, checked_at)</text>
+        <text x="64" y="607" fill="var(--muted)" font-size="11" stroke="none">~720k rows/day at 500 endpoints</text>
+
+        <rect x="50" y="628" width="260" height="48" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="647" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">incidents</text>
+        <text x="64" y="664" fill="var(--muted)" font-size="11" stroke="none">idx (endpoint_id, start_time)</text>
+
+        <rect x="50" y="690" width="260" height="48" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="709" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">endpoint_metrics_hourly</text>
+        <text x="64" y="726" fill="var(--muted)" font-size="11" stroke="none">uptime % · p50/p95/p99</text>
+
+        <!-- KAFKA -->
+        <rect x="382" y="432" width="588" height="146" rx="9" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="402" y="460" fill="currentColor" font-size="14" font-weight="700" stroke="none">Kafka topic</text>
+        <text x="402" y="479" fill="var(--muted)" font-size="11.5" stroke="none" font-family="ui-monospace, Menlo, monospace">api-monitoring-results · key = endpoint_id</text>
+
+        <rect x="402" y="500" width="252" height="56" rx="5" fill="var(--surface-2)" stroke="var(--accent)"/>
+        <text x="416" y="522" fill="currentColor" font-size="13" font-weight="600" stroke="none">Partition 0</text>
+        <text x="416" y="541" fill="var(--muted)" font-size="11" stroke="none">endpoints hashing to P0</text>
+
+        <rect x="682" y="500" width="252" height="56" rx="5" fill="var(--surface-2)" stroke="var(--accent)"/>
+        <text x="696" y="522" fill="currentColor" font-size="13" font-weight="600" stroke="none">Partition 1</text>
+        <text x="696" y="541" fill="var(--muted)" font-size="11" stroke="none">endpoints hashing to P1</text>
+
+        <!-- GROUP 1 -->
+        <rect x="382" y="640" width="278" height="150" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <text x="400" y="666" fill="currentColor" font-size="13" font-weight="700" stroke="none">Group 1 · detector</text>
+        <text x="400" y="684" fill="var(--muted)" font-size="11" stroke="none" font-family="ui-monospace, Menlo, monospace">monitoring_consumer_group</text>
+        <rect x="400" y="696" width="112" height="34" rx="4" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="412" y="718" fill="currentColor" font-size="11.5" stroke="none">Consumer A</text>
+        <rect x="528" y="696" width="112" height="34" rx="4" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="540" y="718" fill="currentColor" font-size="11.5" stroke="none">Consumer B</text>
+        <text x="400" y="752" fill="var(--muted)" font-size="11" stroke="none">3 consecutive failures → incident</text>
+        <text x="400" y="770" fill="var(--muted)" font-size="11" stroke="none">commit only after success</text>
+
+        <!-- GROUP 2 -->
+        <rect x="692" y="640" width="278" height="150" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <text x="710" y="666" fill="currentColor" font-size="13" font-weight="700" stroke="none">Group 2 · rollup</text>
+        <text x="710" y="684" fill="var(--muted)" font-size="11" stroke="none" font-family="ui-monospace, Menlo, monospace">metrics-rollup-group</text>
+        <rect x="710" y="696" width="112" height="34" rx="4" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="722" y="718" fill="currentColor" font-size="11.5" stroke="none">Consumer C</text>
+        <text x="710" y="752" fill="var(--muted)" font-size="11" stroke="none">hourly counts + histogram</text>
+        <text x="710" y="770" fill="var(--muted)" font-size="11" stroke="none">lag here never affects alerting</text>
+
+        <!-- EMAIL -->
+        <rect x="382" y="866" width="278" height="72" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="400" y="892" fill="currentColor" font-size="13" font-weight="600" stroke="none">Email digest</text>
+        <text x="400" y="912" fill="var(--muted)" font-size="11.5" stroke="none">Brevo SMTP · per-user cadence</text>
+
+        <!-- ARROWS -->
+        <line x1="150" y1="74" x2="150" y2="126" marker-end="url(#ah)"/>
+
+        <line x1="304" y1="159" x2="688" y2="159" marker-end="url(#ah)"/>
+        <text x="418" y="152" fill="var(--muted)" font-size="11" stroke="none">check revoked · count attempts</text>
+
+        <line x1="304" y1="290" x2="346" y2="272" marker-end="url(#ah)"/>
+        <text x="300" y="340" fill="var(--muted)" font-size="11" stroke="none">every 60 s</text>
+
+        <line x1="628" y1="266" x2="688" y2="272" marker-end="url(#ah)"/>
+        <text x="620" y="196" fill="var(--muted)" font-size="11" stroke="none">probe</text>
+
+        <polyline points="380,322 180,322 180,426" marker-end="url(#ah)"/>
+        <text x="192" y="352" fill="currentColor" font-size="12" font-weight="600" stroke="none">1 · INSERT + COMMIT</text>
+        <text x="192" y="370" fill="var(--muted)" font-size="11" stroke="none">always before publishing</text>
+
+        <g stroke="var(--accent)" stroke-width="2">
+          <polyline points="560,322 560,380 676,380 676,426" marker-end="url(#ah-a)"/>
+        </g>
+        <text x="580" y="404" fill="var(--accent)" font-size="12" font-weight="600" stroke="none">2 · publish event</text>
+
+        <g stroke="var(--accent)" stroke-width="2">
+          <line x1="500" y1="578" x2="500" y2="634" marker-end="url(#ah-a)"/>
+          <line x1="820" y1="578" x2="820" y2="634" marker-end="url(#ah-a)"/>
+        </g>
+        <text x="352" y="612" fill="var(--muted)" font-size="11" stroke="none">A←P0  B←P1</text>
+        <text x="836" y="612" fill="var(--muted)" font-size="11" stroke="none">C ← P0 + P1</text>
+
+        <line x1="376" y1="700" x2="336" y2="700" marker-end="url(#ah)"/>
+        <text x="336" y="692" fill="var(--muted)" font-size="11" text-anchor="end" stroke="none">write incident</text>
+
+        <polyline points="830,796 830,824 180,824 180,796" marker-end="url(#ah)"/>
+        <text x="596" y="818" fill="var(--muted)" font-size="11" stroke="none">upsert hourly metrics</text>
+
+        <polyline points="180,954 180,902 376,902" marker-end="url(#ah)"/>
+        <text x="196" y="952" fill="var(--muted)" font-size="11" stroke="none">APScheduler · every 30 min</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><strong>The mechanism.</strong> Every check is written to PostgreSQL and committed <em>before</em> the Kafka publish, because the detector reads its three-check window from PostgreSQL. Reversing the order would let it judge a window missing the very check it is reacting to.</figcaption>
+</figure>
+
+<section>
+  <h2><span class="num">01</span>The three ordering rules</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Database write comes first</h3>
+      <p><span class="rule">A failed publish delays detection by one cycle; a wrong order produces a wrong verdict.</span> The next cycle's event sees the orphaned row, so the system self-heals within 60 seconds.</p>
+    </div>
+    <div class="card">
+      <h3>Both groups read everything</h3>
+      <p><span class="rule">Separate offsets, separate lag.</span> The rollup can fall hours behind or crash entirely and incident detection is untouched. That isolation is the whole reason it is a second consumer group rather than a second function call.</p>
+    </div>
+    <div class="card">
+      <h3>The key pins the ordering</h3>
+      <p><span class="rule">Keying by <code>endpoint_id</code> sends every check for an endpoint to the same partition</span> — and therefore the same consumer. Without it, two detectors could race on the same three-check window.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">02</span>Topology at a glance</h2>
+  <table>
+    <tbody>
+      <tr><td>Topics</td><td class="mono">1</td><td>api-monitoring-results</td></tr>
+      <tr><td>Partitions</td><td class="mono">2</td><td>Sized for consumer parallelism, not throughput — 8 msg/s needs neither</td></tr>
+      <tr><td>Consumer groups</td><td class="mono">2</td><td>Detector and rollup, fully independent</td></tr>
+      <tr><td>Consumer processes</td><td class="mono">3</td><td>2 detectors (one partition each) + 1 rollup (both)</td></tr>
+      <tr><td>Delivery</td><td class="mono">at-least-once</td><td>Manual commit after processing; the handler is idempotent</td></tr>
+      <tr><td>API replicas</td><td class="mono">1</td><td>A second would run a second scheduler and double-probe everything</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2><span class="num">03</span>What happens to one check</h2>
+  <table>
+    <thead>
+      <tr><th>Step</th><th>Where</th><th>What</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">1</td><td>Health-check loop</td><td>Probe the endpoint through the shared pooled client, bounded by a 20 s deadline and a 25-way semaphore</td></tr>
+      <tr><td class="mono">2</td><td>PostgreSQL</td><td>Insert the row into <code>health_check_logs</code> and commit</td></tr>
+      <tr><td class="mono">3</td><td>Kafka</td><td>Publish a self-describing event — it carries the expected status and latency, so the consumer needs no lookup and a replay reproduces the same verdict</td></tr>
+      <tr><td class="mono">4a</td><td>Group 1</td><td>Read the last three checks; open or extend an incident only if all three failed</td></tr>
+      <tr><td class="mono">4b</td><td>Group 2</td><td>Fold the latency into its hourly bucket and histogram</td></tr>
+      <tr><td class="mono">5</td><td>Both</td><td>Commit the offset — only after the work succeeded</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2><span class="num">04</span>Failure behaviour</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Endpoint is slow or down</h3>
+      <p>Isolated per endpoint by its own error boundary, a 20 s deadline, and <code>gather(return_exceptions=True)</code>. The cycle finishes for everyone else.</p>
+    </div>
+    <div class="card">
+      <h3>Kafka is unavailable</h3>
+      <p>Checks are still recorded in PostgreSQL. The producer reconnects behind a lock, so 25 concurrent checks cannot storm a dead broker.</p>
+    </div>
+    <div class="card">
+      <h3>A message is malformed</h3>
+      <p>Decoded in our own code rather than inside the driver, so it can be logged, committed past, and skipped — instead of being re-read forever.</p>
+    </div>
+    <div class="card">
+      <h3>Redis is down</h3>
+      <p>Every call fails open. Rate limiting allows, revocation checks pass, and the API keeps serving. Verified by stopping the container.</p>
+    </div>
+  </div>
+</section>
+
+</div>

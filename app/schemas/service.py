@@ -40,6 +40,7 @@ class ApiProducerServiceModal(BaseModel):
     request_body: Optional[Any] = None
     periodic_summary_report: Optional[int] = 60
     expected_status_code: Optional[int] = 200
+    expected_latency_ms: Optional[int] = 200
     response_validation: Optional[Dict[str, Any]] = None
 
 # ----------------------------
@@ -105,10 +106,21 @@ class ApiResponseModal(BaseModel):
 
 
 class ProducerResultModal(BaseModel):
+    """
+    The Kafka event. Self-describing: it carries the judgment inputs alongside the
+    facts, so the consumer needs no config lookup and a replay reproduces the same
+    verdict even if the endpoint has since been edited.
+    """
+    event_version: int = 1
     id: UUID
+    name: Optional[str] = None
     checked_at: datetime
     response_time_ms: Optional[int] = None
     status_code: Optional[int] = None
+    expected_status_code: Optional[int] = None
+    expected_latency_ms: Optional[int] = None
+    is_healthy: Optional[bool] = None
+    error_message: Optional[str] = None
 
 class ApiClientLogs(BaseModel):
     id: UUID

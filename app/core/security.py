@@ -106,22 +106,39 @@ def decode_url_safe_token(token: str):
         logging.error(f"URLSafeToken decode error: {e}")
 
 def get_current_user_uid(request: Request):
-    access_token = request.headers.get("Authorization").split(" ")[1]
-    if access_token is None:
+    """
+    Resolve the caller's user_uid from the Authorization header.
+
+    Parsing is defensive: a missing or malformed header previously raised
+    AttributeError/IndexError and surfaced as a 500 instead of a 401. Expiry is now
+    verified here too — it was disabled, which meant an expired token authenticated
+    at the dependency layer and only the middleware kept it out.
+    """
+    auth_header = request.headers.get("Authorization") or ""
+    parts = auth_header.split(" ", 1)
+    access_token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else None
+
+    if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Access token missing"
         )
+
     try:
         decoded = jwt.decode(
             access_token,
             Config.SECRET_KEY,
             algorithms=[_get_jwt_algorithm()],
-            options={"verify_exp": False}, 
+            options={"verify_exp": True},
         )
         return decoded["user"]["user_uid"]
 
-    except JWTError:
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token expired"
+        )
+    except (JWTError, KeyError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid access token"

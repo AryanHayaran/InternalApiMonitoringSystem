@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlalchemy import true as sa_true, update, delete
+from sqlalchemy import true as sa_true, update, delete, func
 from app.db.models import MonitoredEndpoints, HealthCheckLogs, Incidents, Users
 
 
@@ -113,7 +113,6 @@ class ApiServiceRepository:
         return [dict(row) for row in rows]
 
     async def update_service(self, service_id: str, api_service_data):
-        from sqlalchemy import func
         query = (
             update(MonitoredEndpoints)
             .where(
@@ -222,10 +221,12 @@ class ApiServiceRepository:
             MonitoredEndpoints.expected_latency_ms,
             MonitoredEndpoints.created_at,
             MonitoredEndpoints.updated_at
-        )
+        ).where(
+            MonitoredEndpoints.is_active == True
+        ).limit(1000)
         result = await self.session.execute(query)
         rows = result.mappings().all()
-        return [dict(row) for row in rows] 
+        return [dict(row) for row in rows]
 
     async def update_api_logs(self, data):
         query = HealthCheckLogs(    
@@ -242,6 +243,16 @@ class ApiServiceRepository:
         return {"id": str(query.id)}
 
     async def get_consumer_service(self, service_id: str):
+        """
+        SYSTEM-CONTEXT query — intentionally NOT tenant-scoped.
+
+        Called only from the Kafka consumer, which reacts to an event keyed by an
+        endpoint_id that our own producer emitted. There is no authenticated
+        principal in a background reactor, and the result is never returned to an
+        HTTP caller. Adding `owner_user_id == self.user_uid` here silently degraded
+        to `owner_user_id IS NULL` (the consumer builds this repo without a user)
+        and killed the entire incident pipeline.
+        """
         query = select(
             MonitoredEndpoints.id,
             MonitoredEndpoints.name,
@@ -249,29 +260,29 @@ class ApiServiceRepository:
             MonitoredEndpoints.expected_status_code,
             MonitoredEndpoints.expected_latency_ms,
         ).where(
-            MonitoredEndpoints.id == service_id,
-            MonitoredEndpoints.owner_user_id == self.user_uid
+            MonitoredEndpoints.id == service_id
         )
         result = await self.session.execute(query)
         row = result.mappings().first()
-        return dict(row) if row else None 
+        return dict(row) if row else None
 
     async def get_last_three_records(self, service_id: str):
+        """
+        SYSTEM-CONTEXT query — intentionally NOT tenant-scoped. See get_consumer_service.
+        Filters endpoint_id directly (no join), mirroring get_last_20_latencies.
+        """
         query = select(
             HealthCheckLogs.id,
             HealthCheckLogs.checked_at,
             HealthCheckLogs.response_time_ms,
             HealthCheckLogs.status_code,
             HealthCheckLogs.is_healthy
-        ).join(
-            MonitoredEndpoints, HealthCheckLogs.endpoint_id == MonitoredEndpoints.id
         ).where(
-            MonitoredEndpoints.id == service_id,
-            MonitoredEndpoints.owner_user_id == self.user_uid
+            HealthCheckLogs.endpoint_id == service_id
         ).order_by(HealthCheckLogs.checked_at.desc()).limit(3)
         result = await self.session.execute(query)
         rows = result.mappings().all()
-        return [dict(row) for row in rows]  
+        return [dict(row) for row in rows]
 
     async def get_last_incident(self, endpoint_id: str):
         query = select(
@@ -343,12 +354,13 @@ class ApiServiceRepository:
         rows = result.mappings().all()
         return [dict(row) for row in rows]
 
-    async def update_last_checked(self, api_id: str):
+    async def update_last_checked(self, api_id: str, checked_at=None):
+        """Advance the alert watermark. Defaults to DB now() when no timestamp is given."""
         query = (
             update(MonitoredEndpoints)
             .where(MonitoredEndpoints.id == api_id)
             .values(
-                last_checked_at=func.now()
+                last_checked_at=checked_at if checked_at is not None else func.now()
             )
             .returning(MonitoredEndpoints.id)
         )

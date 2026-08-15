@@ -11,7 +11,7 @@ async def send_user_incident_alerts():
     """Periodic task to send grouped incident alerts to users."""
     now = datetime.now(timezone.utc)
 
-    async with db.get_session() as session:
+    async with db.pg_session_factory() as session:
         # 1) Fetch monitored APIs (assumed to return dict-like rows)
         apis = await api_service.get_monitored_apis(session)
         if not apis:
