@@ -19,6 +19,7 @@ Users register HTTP endpoints. Every 60 seconds each one is probed, the result i
 - [Redis](#redis)
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
+- [Deployment & Setup](#deployment--setup)
 - [Database Migrations](#database-migrations)
 - [Testing](#testing)
 - [Invariants — Do Not Break](#invariants--do-not-break)
@@ -510,6 +511,85 @@ Notes:
 
 ---
 
+## Deployment & Setup
+
+The order below matters. Copy [.env.example](../.env.example) to `.env` and fill it in first.
+
+```bash
+git pull
+
+# 1. Database only
+docker compose up -d postgres
+
+# 2. Migrate in a one-off container — before any app code starts
+docker compose run --rm --no-deps fastapi sh -c "cd /app && alembic upgrade head"
+
+# 3. Now start everything
+docker compose up -d --build
+
+# 4. Create the Kafka topic with 2 partitions (idempotent)
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --topic api-monitoring-results \
+  --partitions 2 --replication-factor 1 --if-not-exists
+```
+
+### Kafka topic management
+
+The broker has `KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"` and `KAFKA_NUM_PARTITIONS: 2`, so the topic *will* appear on first publish with the right shape. Creating it explicitly is still preferable: it makes the partition count a deliberate, reviewable decision rather than a side effect of broker defaults, and it removes a race where the first producer message lands before the consumers have subscribed.
+
+```bash
+# Create (safe to re-run thanks to --if-not-exists)
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --topic api-monitoring-results \
+  --partitions 2 --replication-factor 1 --if-not-exists
+
+# Inspect — confirm PartitionCount: 2
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --describe --topic api-monitoring-results
+
+# List everything
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 --list
+
+# Widen an existing topic (partitions can only ever be INCREASED)
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --alter --topic api-monitoring-results --partitions 2
+
+# Consumer group progress and lag — both groups should appear
+docker compose exec -T kafka kafka-consumer-groups --bootstrap-server localhost:9092 \
+  --describe --group monitoring_consumer_group
+docker compose exec -T kafka kafka-consumer-groups --bootstrap-server localhost:9092 \
+  --describe --group metrics-rollup-group
+
+# Nuclear option — delete and let it recreate at the configured partition count
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --delete --topic api-monitoring-results
+```
+
+`replication-factor 1` is not a choice — this is a single-broker cluster, so no other value is possible. In a multi-broker deployment use 3.
+
+**Increasing partitions is not a no-op.** Because events are keyed by `endpoint_id`, adding partitions changes the key→partition mapping, so during the transition a given endpoint's events can briefly land on two partitions and be processed out of order. Harmless here (the detector recomputes from the database window and is idempotent), but do it during a quiet window.
+
+### Why this order
+
+| Step | Reason |
+|---|---|
+| **2 before 3** | `metrics_consumer` writes to `endpoint_metrics_hourly`. If it starts before the table exists it crash-loops until you migrate. The migration is purely additive, so old code is happy with the new schema — migrate-then-deploy is always the safe direction here. |
+| **`run`, not `exec`** | `exec` requires the service to already be running; at step 2 the app is deliberately still down. `run` spins up a throwaway container (`--rm` removes it, `--no-deps` skips Kafka/Redis since alembic only needs Postgres). |
+| **Step 4 is one-time** | `KAFKA_NUM_PARTITIONS: 2` in compose only applies to **newly created** topics. A topic that already exists at 1 partition stays there, so the second detector consumer would sit idle forever — use `--alter` in that case. |
+
+Step 2 is safe to re-run at any time — Alembic checks its version table and does nothing if you are already at head.
+
+### Verify
+
+```bash
+docker compose run --rm --no-deps fastapi sh -c "cd /app && alembic current"   # → a1b2c3d4e5f6 (head)
+curl http://localhost:8000/api/services/readyz                                 # → postgres/redis/kafka all "up"
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --describe --topic api-monitoring-results                                    # → PartitionCount: 2
+```
+
+---
+
 ## Database Migrations
 
 Schema is Alembic-managed; **the app does not create tables at startup**. [alembic/env.py](../alembic/env.py) builds the URL from the `PG*` env vars at runtime, so the placeholder in `alembic.ini` is ignored.
@@ -517,10 +597,13 @@ Schema is Alembic-managed; **the app does not create tables at startup**. [alemb
 ```bash
 alembic upgrade head                                   # apply
 alembic current                                        # show revision
+alembic history --verbose                              # list revisions
 alembic revision --autogenerate -m "describe change"   # after editing models
 alembic downgrade -1                                   # roll back one
 
-docker compose exec -T fastapi sh -c "cd /app && alembic upgrade head"
+# Through Docker — use `run` when the app is stopped, `exec` when it is already up
+docker compose run  --rm --no-deps fastapi sh -c "cd /app && alembic upgrade head"
+docker compose exec -T          fastapi sh -c "cd /app && alembic upgrade head"
 ```
 
 | Revision | Purpose |
@@ -528,6 +611,12 @@ docker compose exec -T fastapi sh -c "cd /app && alembic upgrade head"
 | `f000a9dda83a` | Initial schema + `uuid-ossp` extension |
 | `2862dbb9d305` | `ON DELETE CASCADE` on the three foreign keys |
 | `a1b2c3d4e5f6` | Three indexes + `endpoint_metrics_hourly` |
+
+**Rolling back the latest revision** drops the three indexes and the metrics table. Queries still work, just slowly — a real escape hatch, not a one-way door:
+
+```bash
+docker compose run --rm --no-deps fastapi sh -c "cd /app && alembic downgrade 2862dbb9d305"
+```
 
 ---
 

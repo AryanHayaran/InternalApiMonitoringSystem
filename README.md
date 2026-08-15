@@ -43,7 +43,13 @@ Register your HTTP endpoints and the platform probes each one every 60 seconds, 
 
 ## Setup
 
-**1. Clone and create a `.env` in the repo root:**
+**1. Clone and create your `.env`** — copy the template, which documents every setting:
+
+```bash
+cp .env.example .env
+```
+
+Minimum you must fill in:
 
 ```env
 PGHOST=localhost
@@ -72,16 +78,43 @@ SENDER_EMAIL=alerts@yourdomain.com
 API_BASE_URL=http://localhost:8000   # target for the test suite
 ```
 
-**2. Start the stack:**
+**2. Start the stack — in this order:**
 
 ```bash
+# a. Database only
+docker compose up -d postgres
+
+# b. Migrate BEFORE any app code starts.
+#    `run` (not `exec`) because the app is deliberately still down;
+#    --rm discards the throwaway container, --no-deps skips Kafka/Redis.
+docker compose run --rm --no-deps fastapi sh -c "cd /app && alembic upgrade head"
+
+# c. Now start everything
 docker compose up -d --build
+
+# d. Create the Kafka topic with 2 partitions (safe to re-run)
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --topic api-monitoring-results \
+  --partitions 2 --replication-factor 1 --if-not-exists
+
+# e. Verify — expect PartitionCount: 2
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --describe --topic api-monitoring-results
 ```
 
-**3. Apply the migrations** — the app does not create tables on startup:
+If step (e) shows `PartitionCount: 1`, the topic was auto-created earlier at the old default. Widen it — partitions can be increased but never decreased:
 
 ```bash
-docker compose exec -T fastapi sh -c "cd /app && alembic upgrade head"
+docker compose exec -T kafka kafka-topics --bootstrap-server localhost:9092 \
+  --alter --topic api-monitoring-results --partitions 2
+```
+
+**Why the order matters:** the app does not create tables at startup, and `metrics_consumer` writes to a table this migration creates — start it first and it crash-loops until you migrate. Step (b) is safe to re-run any time; Alembic does nothing if you're already at head.
+
+**3. Verify:**
+
+```bash
+curl http://localhost:8000/api/services/readyz     # postgres/redis/kafka → "up"
 ```
 
 The API is now at `http://localhost:8000`, with Swagger docs at [/api/docs](http://localhost:8000/api/docs).
