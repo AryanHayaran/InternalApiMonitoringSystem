@@ -8,7 +8,9 @@ from .routers import auth, service
 from .middlewares.token_refresh import TokenRefreshMiddleware
 from .services.monitoring import Producer
 from .infrastructure.kafka.producer import producer_client
+from .infrastructure.clients.api_client import init_http_client, close_http_client
 from .services.alert_scheduler import send_user_incident_alerts
+from .core.config import require_secret_key
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,7 +20,10 @@ producer = Producer()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up application...")
-    
+
+    # Refuse to start with a missing or placeholder signing key
+    require_secret_key()
+
     # Initialize database
     await db.init_db()
     
@@ -32,12 +37,26 @@ async def lifespan(app: FastAPI):
         # In production, you might want to fail fast here
         # raise
 
+    # Shared pooled HTTP client for health probes
+    await init_http_client()
+
     # Start scheduler
+    #
+    # misfire_grace_time defaults to 1 SECOND, which silently skips a run whenever the
+    # loop is briefly busy at trigger time — the job never executes and only a
+    # "was missed by" warning is logged. 30s gives headroom while keeping checks fresh.
+    # max_instances=1 and coalesce=True are the defaults, stated explicitly because
+    # they are deliberate invariants: two overlapping sweeps would double-probe every
+    # endpoint and corrupt the last-3-records window the consumer depends on.
     scheduler.add_job(
         producer.run_all_health_checks,
         'interval',
         minutes=1,
-        id="health_check_job"
+        id="health_check_job",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=30,
+        replace_existing=True,
     )
 
     # Add alert notification job every 30 minutes
@@ -45,7 +64,11 @@ async def lifespan(app: FastAPI):
         send_user_incident_alerts,
         'interval',
         minutes=30,
-        id="alert_scheduler_job"
+        id="alert_scheduler_job",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=60,
+        replace_existing=True,
     )
 
     scheduler.start()
@@ -59,6 +82,9 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
     logger.info("Scheduler shut down gracefully.")
     
+    # Close the shared HTTP client
+    await close_http_client()
+
     # Close Kafka producer
     await producer_client.close()
     logger.info("Kafka producer closed.")

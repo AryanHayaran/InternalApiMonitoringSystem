@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import redis.asyncio as redis
 from app.core.config import Config
@@ -16,10 +18,22 @@ class DB:
         # Redis connection
         if Config.REDIS_HOST and Config.REDIS_PORT:
             redis_url = (
-                f"redis://{Config.REDIS_USER or ''}:{Config.REDIS_PASSWORD or ''}@"
+                f"redis://{quote(Config.REDIS_USER or '', safe='')}:"
+                f"{quote(Config.REDIS_PASSWORD or '', safe='')}@"
                 f"{Config.REDIS_HOST}:{Config.REDIS_PORT}"
             )
-            self.redis_client = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+            # Timeouts are what make Redis genuinely OPTIONAL. They default to None
+            # (infinite), so a hung Redis — as opposed to a refused one — would block
+            # every awaiting request forever.
+            self.redis_client = redis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_timeout=0.25,
+                socket_connect_timeout=0.25,
+                retry_on_timeout=False,
+                health_check_interval=30,
+            )
 
         # Postgres connection
         if all([Config.PGHOST, Config.PGDATABASE, Config.PGUSER, Config.PGPASSWORD, Config.PGPORT]):
@@ -27,7 +41,17 @@ class DB:
                 f"postgresql+asyncpg://{Config.PGUSER}:{Config.PGPASSWORD}"
                 f"@{Config.PGHOST}:{Config.PGPORT}/{Config.PGDATABASE}"
             )
-            self.pg_engine = create_async_engine(db_url, pool_pre_ping=True)
+            # Pool must comfortably exceed HEALTH_CHECK_CONCURRENCY — the concurrent
+            # health-check loop opens a session per endpoint for its log insert, and
+            # the SQLAlchemy default (5 + 10 overflow) would raise QueuePool errors
+            # that surface as scattered per-endpoint failures.
+            self.pg_engine = create_async_engine(
+                db_url,
+                pool_pre_ping=True,
+                pool_size=20,
+                max_overflow=10,
+                pool_timeout=30,
+            )
 
             # Use async_sessionmaker instead of sessionmaker for AsyncSession
             self.pg_session_factory = async_sessionmaker(
@@ -43,7 +67,8 @@ class DB:
         Close database connections.
         """
         if self.redis_client:
-            await self.redis_client.close()
+            # close() is the deprecated alias in redis-py 5.x
+            await self.redis_client.aclose()
 
         if self.pg_engine:
             await self.pg_engine.dispose()

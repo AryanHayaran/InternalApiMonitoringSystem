@@ -1,0 +1,366 @@
+<title>Monitoring Pipeline Rebuild</title>
+
+<style>
+  :root {
+    --bg:        #F4F6F9;
+    --surface:   #FFFFFF;
+    --surface-2: #EDF1F6;
+    --ink:       #0F1B2A;
+    --muted:     #5B6B80;
+    --line:      #C6D1DE;
+    --line-soft: #DDE4EC;
+    --accent:    #0F766E;
+    --accent-in: #FFFFFF;
+    --badge:     #B45309;
+    --danger:    #B91C1C;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #0B131E;
+      --surface:   #121E2C;
+      --surface-2: #182839;
+      --ink:       #E7EEF6;
+      --muted:     #94A6BA;
+      --line:      #2A3C51;
+      --line-soft: #223245;
+      --accent:    #2DD4BF;
+      --accent-in: #06231F;
+      --badge:     #F0A020;
+      --danger:    #F87171;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:        #0B131E;
+    --surface:   #121E2C;
+    --surface-2: #182839;
+    --ink:       #E7EEF6;
+    --muted:     #94A6BA;
+    --line:      #2A3C51;
+    --line-soft: #223245;
+    --accent:    #2DD4BF;
+    --accent-in: #06231F;
+    --badge:     #F0A020;
+    --danger:    #F87171;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 48px 24px 96px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+
+  header { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+  }
+  h1 { font-size: clamp(28px, 4.4vw, 42px); line-height: 1.1; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+  .lede { font-size: 17px; color: var(--muted); max-width: 62ch; margin: 0; }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: 14px; }
+  .canvas {
+    background: var(--surface); border: 1px solid var(--line-soft);
+    border-radius: 10px; padding: 20px; overflow-x: auto;
+  }
+  svg { display: block; max-width: 100%; height: auto; min-width: 760px; }
+  figcaption { font-size: 14px; color: var(--muted); max-width: 68ch; }
+
+  h2 { font-size: 20px; margin: 0 0 14px; letter-spacing: -.01em; }
+  section { display: flex; flex-direction: column; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.n { width: 34px; }
+  .pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--badge); color: #fff; font-size: 12px; font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .must { color: var(--danger); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .92em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px;
+  }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 10px; padding: 18px 20px; }
+  .card h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: -.005em; }
+  .card p, .card ul { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card ul { padding-left: 18px; }
+  .card li + li { margin-top: 5px; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Internal API Monitoring System</div>
+  <h1>Monitoring Pipeline Rebuild</h1>
+  <p class="lede">The complete target system, with every phase of work marked on the component it touches. One producer, one topic, two partitions, two consumer groups — each earning its place.</p>
+</header>
+
+<figure>
+  <div class="canvas">
+    <svg viewBox="0 0 1000 1010" role="img"
+         aria-label="Flow diagram: the FastAPI process probes external APIs, writes health check logs to Postgres, then publishes keyed events to a two-partition Kafka topic. Two independent consumer groups read that topic — an incident detector with two consumers and a metrics rollup with one — and both write back to Postgres. A scheduled job emails digests from the incidents table.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <g fill="none" stroke="currentColor" stroke-width="1.5">
+
+        <!-- CLIENT -->
+        <rect x="30" y="24" width="240" height="50" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="46" y="46" fill="currentColor" font-size="14" font-weight="600" stroke="none">Client / Dashboard</text>
+        <text x="46" y="64" fill="var(--muted)" font-size="11.5" stroke="none">React · Postman</text>
+
+        <!-- FASTAPI CONTAINER -->
+        <rect x="30" y="96" width="620" height="286" rx="9" fill="none" stroke="var(--line)" stroke-dasharray="5 4"/>
+        <text x="44" y="118" fill="var(--muted)" font-size="11.5" stroke="none" font-family="ui-monospace, Menlo, monospace">FastAPI process · single replica</text>
+
+        <rect x="52" y="132" width="252" height="54" rx="6" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="66" y="153" fill="currentColor" font-size="13" font-weight="600" stroke="none">TokenRefreshMiddleware</text>
+        <text x="66" y="171" fill="var(--muted)" font-size="11.5" stroke="none">JWT verify · denylist check</text>
+        <circle cx="292" cy="144" r="11" fill="var(--badge)" stroke="none"/>
+        <text x="292" y="148" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" stroke="none">6</text>
+
+        <rect x="52" y="200" width="252" height="54" rx="6" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="66" y="221" fill="currentColor" font-size="13" font-weight="600" stroke="none">Routers → Services → Repos</text>
+        <text x="66" y="239" fill="var(--muted)" font-size="11.5" stroke="none">ownership enforced in SQL</text>
+
+        <rect x="52" y="268" width="252" height="54" rx="6" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="66" y="289" fill="currentColor" font-size="13" font-weight="600" stroke="none">APScheduler</text>
+        <text x="66" y="307" fill="var(--muted)" font-size="11.5" stroke="none">60 s checks · 30 min digests</text>
+
+        <rect x="352" y="200" width="276" height="122" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="368" y="224" fill="currentColor" font-size="13" font-weight="600" stroke="none">Health-check loop</text>
+        <text x="368" y="245" fill="var(--muted)" font-size="11.5" stroke="none">asyncio.gather + Semaphore(25)</text>
+        <text x="368" y="263" fill="var(--muted)" font-size="11.5" stroke="none">shared httpx pool · keepalive 15 s</text>
+        <text x="368" y="281" fill="var(--muted)" font-size="11.5" stroke="none">per-probe deadline 20 s</text>
+        <text x="368" y="304" fill="var(--muted)" font-size="11.5" stroke="none">failures isolated per endpoint</text>
+        <circle cx="612" cy="214" r="11" fill="var(--badge)" stroke="none"/>
+        <text x="612" y="218" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" stroke="none">3</text>
+
+        <!-- REDIS -->
+        <rect x="694" y="132" width="276" height="76" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="710" y="154" fill="currentColor" font-size="13" font-weight="600" stroke="none">Redis</text>
+        <text x="710" y="172" fill="var(--muted)" font-size="11.5" stroke="none">jti denylist · login rate limit</text>
+        <text x="710" y="190" fill="var(--muted)" font-size="11.5" stroke="none">fail-open · never blocks a request</text>
+        <circle cx="958" cy="144" r="11" fill="var(--badge)" stroke="none"/>
+        <text x="958" y="148" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" stroke="none">5</text>
+
+        <!-- EXTERNAL -->
+        <rect x="694" y="244" width="276" height="62" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="710" y="268" fill="currentColor" font-size="13" font-weight="600" stroke="none">Monitored endpoints</text>
+        <text x="710" y="288" fill="var(--muted)" font-size="11.5" stroke="none">the user's external APIs</text>
+
+        <!-- POSTGRES -->
+        <rect x="30" y="432" width="300" height="522" rx="9" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <text x="48" y="460" fill="currentColor" font-size="14" font-weight="700" stroke="none">PostgreSQL</text>
+        <text x="48" y="479" fill="var(--muted)" font-size="11.5" stroke="none">source of truth</text>
+        <circle cx="308" cy="452" r="11" fill="var(--badge)" stroke="none"/>
+        <text x="308" y="456" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" stroke="none">2</text>
+
+        <rect x="50" y="500" width="260" height="42" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="519" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">users</text>
+        <text x="64" y="535" fill="var(--muted)" font-size="11" stroke="none">monitored_endpoints</text>
+
+        <rect x="50" y="556" width="260" height="58" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="575" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">health_check_logs</text>
+        <text x="64" y="592" fill="var(--muted)" font-size="11" stroke="none">+ idx (endpoint_id, checked_at)</text>
+        <text x="64" y="607" fill="var(--muted)" font-size="11" stroke="none">720k rows/day at 500 endpoints</text>
+
+        <rect x="50" y="628" width="260" height="48" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="647" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">incidents</text>
+        <text x="64" y="664" fill="var(--muted)" font-size="11" stroke="none">+ idx (endpoint_id, start_time)</text>
+
+        <rect x="50" y="690" width="260" height="48" rx="5" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="64" y="709" fill="currentColor" font-size="12" stroke="none" font-family="ui-monospace, Menlo, monospace">endpoint_metrics_hourly</text>
+        <text x="64" y="726" fill="var(--muted)" font-size="11" stroke="none">new · uptime % · p50/p95/p99</text>
+
+        <!-- KAFKA -->
+        <rect x="382" y="432" width="588" height="146" rx="9" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="402" y="460" fill="currentColor" font-size="14" font-weight="700" stroke="none">Kafka topic</text>
+        <text x="402" y="479" fill="var(--muted)" font-size="11.5" stroke="none" font-family="ui-monospace, Menlo, monospace">api-monitoring-results · retention 7 d</text>
+        <circle cx="948" cy="452" r="11" fill="var(--badge)" stroke="none"/>
+        <text x="948" y="456" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" stroke="none">4</text>
+
+        <rect x="402" y="500" width="252" height="56" rx="5" fill="var(--surface-2)" stroke="var(--accent)"/>
+        <text x="416" y="522" fill="currentColor" font-size="13" font-weight="600" stroke="none">Partition 0</text>
+        <text x="416" y="541" fill="var(--muted)" font-size="11" stroke="none">endpoints hashing to P0</text>
+
+        <rect x="682" y="500" width="252" height="56" rx="5" fill="var(--surface-2)" stroke="var(--accent)"/>
+        <text x="696" y="522" fill="currentColor" font-size="13" font-weight="600" stroke="none">Partition 1</text>
+        <text x="696" y="541" fill="var(--muted)" font-size="11" stroke="none">endpoints hashing to P1</text>
+
+        <!-- GROUP 1 -->
+        <rect x="382" y="640" width="278" height="150" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <text x="400" y="666" fill="currentColor" font-size="13" font-weight="700" stroke="none">Group 1 · detector</text>
+        <text x="400" y="684" fill="var(--muted)" font-size="11" stroke="none" font-family="ui-monospace, Menlo, monospace">monitoring_consumer_group</text>
+        <rect x="400" y="696" width="112" height="34" rx="4" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="414" y="718" fill="currentColor" font-size="11.5" stroke="none">Consumer A</text>
+        <rect x="528" y="696" width="112" height="34" rx="4" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="542" y="718" fill="currentColor" font-size="11.5" stroke="none">Consumer B</text>
+        <text x="400" y="752" fill="var(--muted)" font-size="11" stroke="none">3 consecutive failures → incident</text>
+        <text x="400" y="770" fill="var(--muted)" font-size="11" stroke="none">manual commit after success</text>
+        <circle cx="640" cy="660" r="11" fill="var(--badge)" stroke="none"/>
+        <text x="640" y="664" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" stroke="none">1</text>
+
+        <!-- GROUP 2 -->
+        <rect x="692" y="640" width="278" height="150" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <text x="710" y="666" fill="currentColor" font-size="13" font-weight="700" stroke="none">Group 2 · rollup</text>
+        <text x="710" y="684" fill="var(--muted)" font-size="11" stroke="none" font-family="ui-monospace, Menlo, monospace">metrics-rollup-group</text>
+        <rect x="710" y="696" width="112" height="34" rx="4" fill="var(--surface-2)" stroke="var(--line-soft)"/>
+        <text x="724" y="718" fill="currentColor" font-size="11.5" stroke="none">Consumer C</text>
+        <text x="710" y="752" fill="var(--muted)" font-size="11" stroke="none">hourly uptime + latency buckets</text>
+        <text x="710" y="770" fill="var(--muted)" font-size="11" stroke="none">lag here never affects alerting</text>
+        <circle cx="950" cy="660" r="11" fill="var(--badge)" stroke="none"/>
+        <text x="950" y="664" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" stroke="none">4</text>
+
+        <!-- EMAIL -->
+        <rect x="382" y="866" width="278" height="72" rx="7" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text x="400" y="892" fill="currentColor" font-size="13" font-weight="600" stroke="none">Email digest</text>
+        <text x="400" y="912" fill="var(--muted)" font-size="11.5" stroke="none">Brevo SMTP · per-user cadence</text>
+
+        <!-- ============ ARROWS ============ -->
+
+        <!-- client -> middleware -->
+        <line x1="150" y1="74" x2="150" y2="126" marker-end="url(#ah)"/>
+
+        <!-- middleware -> redis -->
+        <line x1="304" y1="159" x2="688" y2="159" marker-end="url(#ah)"/>
+        <text x="420" y="152" fill="var(--muted)" font-size="11" stroke="none">check jti · count attempts</text>
+
+        <!-- scheduler -> loop -->
+        <line x1="304" y1="290" x2="346" y2="272" marker-end="url(#ah)"/>
+        <text x="300" y="340" fill="var(--muted)" font-size="11" stroke="none">every 60 s</text>
+
+        <!-- loop -> external -->
+        <line x1="628" y1="266" x2="688" y2="272" marker-end="url(#ah)"/>
+        <text x="626" y="196" fill="var(--muted)" font-size="11" stroke="none">probe</text>
+
+        <!-- loop -> postgres  (step 1) -->
+        <polyline points="380,322 180,322 180,426" marker-end="url(#ah)"/>
+        <text x="192" y="352" fill="currentColor" font-size="12" font-weight="600" stroke="none">1 · INSERT health_check_logs</text>
+        <text x="192" y="370" fill="var(--muted)" font-size="11" stroke="none">commit before publishing</text>
+
+        <!-- loop -> kafka (step 2) -->
+        <g stroke="var(--accent)" stroke-width="2">
+          <polyline points="560,322 560,380 676,380 676,426" marker-end="url(#ah-a)"/>
+        </g>
+        <text x="580" y="404" fill="var(--accent)" font-size="12" font-weight="600" stroke="none">2 · publish · key = endpoint_id</text>
+
+        <!-- kafka -> group1 -->
+        <g stroke="var(--accent)" stroke-width="2">
+          <line x1="500" y1="578" x2="500" y2="634" marker-end="url(#ah-a)"/>
+          <line x1="820" y1="578" x2="820" y2="634" marker-end="url(#ah-a)"/>
+        </g>
+        <text x="352" y="612" fill="var(--muted)" font-size="11" stroke="none">A←P0  B←P1</text>
+        <text x="836" y="612" fill="var(--muted)" font-size="11" stroke="none">C ← P0 + P1</text>
+
+        <!-- group1 -> postgres -->
+        <line x1="376" y1="700" x2="336" y2="700" marker-end="url(#ah)"/>
+        <text x="336" y="692" fill="var(--muted)" font-size="11" text-anchor="end" stroke="none">write incident</text>
+
+        <!-- group2 -> postgres -->
+        <polyline points="830,796 830,824 180,824 180,796" marker-end="url(#ah)"/>
+        <text x="600" y="818" fill="var(--muted)" font-size="11" stroke="none">upsert hourly metrics</text>
+
+        <!-- postgres -> email -->
+        <line x1="180" y1="960" x2="180" y2="902" stroke="var(--line)" stroke-dasharray="0"/>
+        <polyline points="180,954 180,902 376,902" marker-end="url(#ah)"/>
+        <text x="196" y="952" fill="var(--muted)" font-size="11" stroke="none">APScheduler · every 30 min</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><strong>The mechanism.</strong> The health-check loop writes to Postgres <em>before</em> publishing, so a failed publish delays detection by one cycle instead of producing a wrong verdict. Events are keyed by <code>endpoint_id</code>, which pins every check for an endpoint to one partition — that is what makes two detector consumers safe.</figcaption>
+</figure>
+
+<section>
+  <h2>What each number means</h2>
+  <table>
+    <thead>
+      <tr><th class="n"></th><th>Phase</th><th>What changes</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="pill">1</span></td>
+        <td>Revive the pipeline</td>
+        <td>Six defects that make incident detection and email alerts non-functional today. The tenant filter that renders as <code>IS NULL</code>, dict-vs-attribute access, <code>db.get_session()</code> which does not exist.</td>
+        <td class="must">Must</td>
+      </tr>
+      <tr>
+        <td><span class="pill">2</span></td>
+        <td>Indexes</td>
+        <td>Three indexes on <code>health_check_logs</code>, <code>incidents</code>, <code>monitored_endpoints</code>. Every read is a sequential scan today.</td>
+        <td class="must">Must</td>
+      </tr>
+      <tr>
+        <td><span class="pill">3</span></td>
+        <td>Concurrency</td>
+        <td>Sequential loop → <code>gather</code> + semaphore. Shared pooled HTTP client. Bigger DB pool <em>first</em>. APScheduler misfire grace 1 s → 30 s.</td>
+        <td class="must">Must</td>
+      </tr>
+      <tr>
+        <td><span class="pill">4</span></td>
+        <td>Kafka</td>
+        <td>Self-describing events, 2 partitions, manual commits, JSON parsing moved out of the deserializer, reconnect loop, and the second consumer group.</td>
+        <td>Should</td>
+      </tr>
+      <tr>
+        <td><span class="pill">5</span></td>
+        <td>Redis</td>
+        <td>Login rate limiting and a JWT <code>jti</code> denylist so logout actually ends a session. Socket timeouts first, or "optional" is a claim the code cannot honor.</td>
+        <td>Should</td>
+      </tr>
+      <tr>
+        <td><span class="pill">6</span></td>
+        <td>Auth</td>
+        <td>Refresh-token validation that compares the presented token, expiry actually enforced, no hardcoded secret, and bcrypt moved off the event loop.</td>
+        <td>Should</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Reading the topology</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Both groups read every message</h3>
+      <p>Group 1 and Group 2 consume the same topic independently, with separate offsets. If the rollup falls behind, alerting is completely unaffected. That isolation is the entire reason a second group exists rather than a second function call.</p>
+    </div>
+    <div class="card">
+      <h3>Within a group, partitions divide</h3>
+      <p>Group 1's two consumers take one partition each. A third consumer would sit idle — a partition is only ever assigned to one consumer per group. Group 2's single consumer takes both.</p>
+    </div>
+    <div class="card">
+      <h3>What is genuinely new</h3>
+      <ul>
+        <li>Partitions 1 → 2</li>
+        <li>A second consumer in the existing group</li>
+        <li>The rollup group and its table</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>What stays untouched</h3>
+      <ul>
+        <li>Topic and consumer-group names</li>
+        <li>The detector's logic and container</li>
+        <li>Email digests via APScheduler</li>
+        <li>Routers → services → repositories</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</div>

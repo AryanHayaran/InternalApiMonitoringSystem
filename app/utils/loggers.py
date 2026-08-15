@@ -22,6 +22,15 @@ formatter = logging.Formatter(
 # ----------------------------
 # Console Handler (Real-Time Logs)
 # ----------------------------
+# Log messages contain non-ASCII characters (emoji, arrows). On Windows the console
+# defaults to cp1252, so every such record raised UnicodeEncodeError inside the
+# logging machinery — printing a traceback instead of the log line. Force UTF-8 and
+# fall back to replacement characters rather than losing the record.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):  # non-reconfigurable stream
+    pass
+
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
 console_handler.setLevel(LOG_LEVEL)

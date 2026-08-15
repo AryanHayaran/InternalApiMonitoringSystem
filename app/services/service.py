@@ -161,12 +161,13 @@ class ApiService:
             last_incident = await api_service_repository.get_last_incident(endpoint_id)
 
             if last_incident:
-                last_end = last_incident.end_time
-                last_error = last_incident.initial_error or ""
+                # get_last_incident returns dict(row), not an ORM object
+                last_end = last_incident["end_time"]
+                last_error = last_incident["initial_error"] or ""
 
                 # Only merge if last incident type matches current reason
                 if last_error == error_message and (last_end is None or start_time <= last_end):
-                    update_incident = await api_service_repository.update_incident(last_incident.id, end_time, error_message)
+                    update_incident = await api_service_repository.update_incident(last_incident["id"], end_time, error_message)
 
                     logger.info(f"{update_incident} Incident updated for endpoint {endpoint_id} ({reason})")
                 else:
@@ -197,8 +198,8 @@ class ApiService:
         
 
 
-    async def update_last_checked(self, session: AsyncSession, api_id: str):
+    async def update_last_checked(self, session: AsyncSession, api_id: str, checked_at=None):
         """Update last_checked_at for a monitored API after sending alert."""
         api_service_repository = ApiServiceRepository(session=session)
-        await api_service_repository.update_last_checked(api_id)
+        await api_service_repository.update_last_checked(api_id, checked_at)
         await session.commit()
