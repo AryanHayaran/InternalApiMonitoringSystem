@@ -16,8 +16,16 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # 2 partitions so the detector group can run 2 consumers (1 partition each).
+      # Only applies to NEWLY created topics — an existing topic stays at its
+      # current count until altered or deleted.
+      KAFKA_NUM_PARTITIONS: 2
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
       KAFKA_LOG4J_LOGGERS: "org.apache.kafka.image.loader.MetadataLoader=WARN"
+    volumes:
+      # Without this, all topic data and KRaft metadata vanish when the container
+      # is removed — including consumer group offsets.
+      - kafka_data:/var/lib/kafka/data
     networks:
       - monitoring_network
 
@@ -91,12 +99,16 @@ services:
     networks:
       - monitoring_network
 
+  # GROUP 1 — incident detector. Scaled to 2 replicas so the group's two consumers
+  # take one partition each. Keying by endpoint_id guarantees all checks for an
+  # endpoint reach the same consumer, which is what makes the last-3 window safe.
   consumer:
     build:
       context: .
       dockerfile: app/docker/Dockerfile.consumer
-    container_name: alert_consumer
     restart: always
+    deploy:
+      replicas: 2
     environment:
       PGHOST: postgres
       PGDATABASE: ${PGDATABASE}
@@ -107,6 +119,7 @@ services:
       REDIS_PORT: 6379
       KAFKA_BROKER_URL: kafka:29092
       KAFKA_TOPIC_NAME: api-monitoring-results
+      KAFKA_CONSUMER_GROUP: monitoring_consumer_group
     volumes:
       - .:/app
     depends_on:
@@ -119,9 +132,40 @@ services:
     networks:
       - monitoring_network
 
+  # GROUP 2 — metrics rollup. Reads the SAME topic with its own offsets, so lag or
+  # failure here cannot affect incident detection or alerting.
+  metrics_consumer:
+    build:
+      context: .
+      dockerfile: app/docker/Dockerfile.consumer
+    container_name: metrics_rollup
+    restart: always
+    command: ["python", "-m", "app.services.metricsConsumer"]
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGPORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKER_URL: kafka:29092
+      KAFKA_TOPIC_NAME: api-monitoring-results
+      KAFKA_ROLLUP_GROUP: metrics-rollup-group
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - monitoring_network
+
 volumes:
   postgres_data:
   redis_data:
+  kafka_data:
 
 networks:
   monitoring_network:
